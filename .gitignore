@@ -1,0 +1,13 @@
+demo2/workspace/backend/target/
+demo2/workspace/backend/target
+/example/
+.vscode/settings.json
+dist/
+demo2/workspace/frontend/node_modules/.vite/deps/_metadata.json
+/.trae/
+/.vscode/
+/config/
+/design/
+/prd/
+/workspace/backend/target/
+/workspace/frontend/dist/
