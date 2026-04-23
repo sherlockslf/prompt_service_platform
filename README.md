@@ -47,11 +47,11 @@
 | ----------------- | ------- | -------- |
 | Java              | 17      | 运行环境     |
 | Spring Boot       | 3.2.0   | 应用框架     |
-| Spring Security   | 6.2.0   | 认证授权     |
+| Spring Security   | 6.2.0   | （暂未启用）   |
 | Spring Data JPA   | 3.2.0   | 数据访问     |
 | MySQL             | 8.0     | 关系型数据库   |
 | Redis             | -       | 缓存服务     |
-| JWT (jjwt)        | 0.11.5  | Token 管理 |
+| JWT (jjwt)        | 0.11.5  | （暂未启用）   |
 | Lombok            | 1.18.30 | 代码简化     |
 | Hibernate         | 6.3.1   | ORM 框架   |
 | SpringDoc OpenAPI | 2.2.0   | API 文档   |
@@ -110,7 +110,6 @@ demo2/
     │   │   │       ├── InjectionSummaryPanel.vue # 注入清单面板
     │   │   │       └── TestDatasetRunner.vue     # 测试集运行器
     │   │   ├── views/               # 页面视图
-    │   │   │   ├── auth/Login.vue   # 登录页
     │   │   │   ├── admin/           # 管理员页面
     │   │   │   ├── developer/       # 研发页面
     │   │   │   └── business/        # 业务页面
@@ -128,8 +127,6 @@ demo2/
     ├── tools/                       # 工具脚本
     │   ├── init_database.bat        # 数据库初始化脚本（Windows）
     │   ├── init_database.py         # 数据库初始化脚本（Python）
-    │   ├── update_passwords.bat     # 密码更新脚本
-    │   ├── update_passwords_to_plain.py
     │   └── update_version_fields.py
     │
     ├── start-all.bat                # 一键启动前后端
@@ -141,12 +138,11 @@ demo2/
 
 ## 核心功能模块
 
-### 1. 认证授权模块
+### 1. 访问与角色模块（当前无登录态）
 
-- JWT Token 认证
-- 基于角色的权限控制（ADMIN / DEVELOPER / BUSINESS）
-- 用户登录/登出
-- 密码加密存储（BCrypt）
+- 基于角色的功能分区（ADMIN / DEVELOPER / BUSINESS）
+- 页面与能力按角色展示
+- 当前版本暂不启用登录/登出与 Token 验证
 
 ### 2. PSU 管理模块
 
@@ -199,11 +195,11 @@ demo2/
 
 ## 角色与权限
 
-| 角色  | 用户名         | 密码         | 权限说明                       |
-| --- | ----------- | ---------- | -------------------------- |
-| 管理员 | admin\_user | Admin\@123 | 用户管理、系统配置、审计日志             |
-| 研发  | dev\_user   | Dev\@123   | 创建 PSU、定义 Schema、审核版本、代码生成 |
-| 业务  | bus\_user   | Bus\@123   | Prompt 编排、在线调试、提交审核        |
+| 角色  | 权限说明                       |
+| --- | -------------------------- |
+| 管理员 | 用户管理、系统配置、审计日志             |
+| 研发  | 创建 PSU、定义 Schema、审核版本、代码生成 |
+| 业务  | Prompt 编排、在线调试、提交审核        |
 
 ### 权限矩阵
 
@@ -326,12 +322,9 @@ Test Run (1) ──→ (N) Test Run Item
 
 ## API 接口
 
-### 认证接口
+### 访问说明
 
-| 方法   | 路径                | 说明       |
-| ---- | ----------------- | -------- |
-| POST | /api/auth/login   | 用户登录     |
-| GET  | /api/auth/profile | 获取当前用户信息 |
+当前版本暂不提供认证接口，`/api/auth/*` 已临时下线。
 
 ### PSU 管理接口
 
@@ -399,7 +392,6 @@ Test Run (1) ──→ (N) Test Run Item
 | llm.api-key            | API 密钥   | 多个密钥（逗号分隔）    |
 | llm.base-url           | API 地址   | 阿里云 DashScope |
 | llm.model              | 模型名称     | qwen-max      |
-| security.jwt-secret    | JWT 密钥   | -             |
 | server.port            | 服务端口     | 8084          |
 
 ### Nacos 配置
@@ -421,9 +413,8 @@ com.example.psu/
 ├── PsuPlatformApplication.java    # 主应用类
 ├── config/                        # 配置类
 │   ├── DatabaseConfig.java        # 数据库配置
-│   └── SecurityConfig.java        # 安全配置
+│   └── AppConfig.java             # 应用配置
 ├── controller/                    # 控制器层
-│   ├── AuthController.java        # 认证控制器
 │   ├── PsuController.java         # PSU 管理
 │   ├── JsonSchemaController.java  # Schema 管理
 │   ├── PromptController.java      # Prompt 管理
@@ -452,14 +443,7 @@ com.example.psu/
 │   │   ├── UpdateSchemaRequest.java
 │   │   ├── UpdatePromptRequest.java
 │   │   └── ReviewRequest.java
-│   ├── AuthRequest.java
-│   ├── AuthResponse.java
 │   └── PsuCreateRequest.java
-├── security/                      # 安全相关
-│   ├── JwtUtil.java
-│   ├── JwtAuthenticationFilter.java
-│   ├── UserDetailsServiceImpl.java
-│   └── SecurityConfig.java
 └── util/                          # 工具类
     └── UserContext.java
 ```
@@ -490,7 +474,6 @@ src/
 │   ├── Layout.vue        # 布局组件
 │   └── composer/         # 编排容器组件
 ├── views/                 # 页面视图
-│   ├── auth/             # 认证页面
 │   ├── admin/            # 管理员页面
 │   ├── developer/        # 研发页面
 │   └── business/         # 业务页面
@@ -576,14 +559,9 @@ npm run preview
 - 若需修改，只能创建新 DRAFT（新 revision）并重新提审
 - 退回时区分：退回开发改 Schema 或退回业务重编排
 
-### 默认账号
+### 登录与 Token 验证
 
-如果默认账号登录失败，可运行工具脚本修复：
-
-```bash
-cd workspace/tools
-update_passwords.bat
-```
+当前版本为功能验证阶段，暂时移除登录与 Token 验证链路；文档中的接口与流程均按“无登录态”维护。
 
 ***
 
