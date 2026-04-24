@@ -19,4 +19,6 @@ public interface PromptCompositionRevisionRepository extends JpaRepository<Promp
         Long psuId,
         CompositionStatus statusAtTime
     );
+
+    Optional<PromptCompositionRevision> findByCompositionIdAndRevisionNo(Long compositionId, Integer revisionNo);
 }

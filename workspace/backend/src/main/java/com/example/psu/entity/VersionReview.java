@@ -43,13 +43,7 @@ public class VersionReview {
     private Long psuId;
 
     @Column(nullable = false)
-    private Integer majorVersion = 0;
-
-    @Column(nullable = false)
-    private Integer minorVersion = 0;
-
-    @Column(nullable = false)
-    private Integer patchVersion = 0;
+    private Integer versionNo = 1;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

@@ -128,7 +128,7 @@ public class PsuService {
         PsuResponse response = new PsuResponse();
         BeanUtils.copyProperties(psu, response);
         response.setStatus(psu.getStatus().getCode());
-        response.setFullVersion(psu.getMajorVersion() + "." + psu.getMinorVersion() + "." + psu.getPatchVersion());
+        response.setVersionNo(psu.getVersionNo());
         
         // 获取创建者名称
         userRepository.findById(psu.getCreatorId()).ifPresent(creator -> {

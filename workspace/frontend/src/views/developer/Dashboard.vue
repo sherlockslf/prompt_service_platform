@@ -18,6 +18,9 @@
           <el-menu-item index="5">
             <span>代码生成</span>
           </el-menu-item>
+          <el-menu-item index="6">
+            <span>发版中心</span>
+          </el-menu-item>
         </el-menu>
       </el-aside>
       <el-main class="main-content">
@@ -172,7 +175,7 @@
             <el-table-column prop="psuId" label="PSU ID" width="150"></el-table-column>
             <el-table-column label="版本" width="150">
               <template #default="{ row }">
-                {{ row.majorVersion }}.{{ row.minorVersion }}.{{ row.patchVersion }}
+                {{ row.versionNo }}
               </template>
             </el-table-column>
             <el-table-column prop="status" label="状态" width="120">
@@ -421,6 +424,10 @@ const handleMenuSelect = (index) => {
       return
     }
     router.push('/business/composer')
+    return
+  }
+  if (index === '6') {
+    router.push('/developer/releases')
     return
   }
   activeMenu.value = index

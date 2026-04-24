@@ -77,11 +77,8 @@ public class JsonSchemaService {
         
         JsonSchema savedSchema = jsonSchemaRepository.save(newSchema);
         
-        // 更新PSU的版本号（次版本号递增）
-        // 注意：这里需要注入VersionReviewService
-        // 由于循环依赖问题，我们直接在这里更新PSU版本
-        psu.setMinorVersion(psu.getMinorVersion() + 1);
-        psu.setPatchVersion(0); // 重置修订版本号
+        // 更新PSU版本号（单字段递增）
+        psu.setVersionNo(psu.getVersionNo() + 1);
         psuRepository.save(psu);
         
         return savedSchema;

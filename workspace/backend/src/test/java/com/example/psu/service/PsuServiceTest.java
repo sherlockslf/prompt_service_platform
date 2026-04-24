@@ -66,9 +66,7 @@ class PsuServiceTest {
         testPsu.setDescription("这是一个测试PSU");
         testPsu.setStatus(PsuStatus.ACTIVE);
         testPsu.setCreatorId(1L);
-        testPsu.setMajorVersion(0);
-        testPsu.setMinorVersion(0);
-        testPsu.setPatchVersion(0);
+        testPsu.setVersionNo(1);
         testPsu.setCreatedAt(LocalDateTime.now());
         testPsu.setUpdatedAt(LocalDateTime.now());
     }
@@ -206,7 +204,7 @@ class PsuServiceTest {
         assertEquals("test_psu_001", response.getPsuId());
         assertEquals("测试PSU", response.getName());
         assertEquals("ACTIVE", response.getStatus());
-        assertEquals("0.0.0", response.getFullVersion());
+        assertEquals(1, response.getVersionNo());
         assertEquals("dev_user", response.getCreatorName());
 
         // 验证mock调用

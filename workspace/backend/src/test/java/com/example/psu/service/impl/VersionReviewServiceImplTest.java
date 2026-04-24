@@ -53,9 +53,7 @@ class VersionReviewServiceImplTest {
     void submitVersion_shouldCreatePendingReview() {
         PsuUnit psu = new PsuUnit();
         psu.setId(1L);
-        psu.setMajorVersion(1);
-        psu.setMinorVersion(2);
-        psu.setPatchVersion(3);
+        psu.setVersionNo(123);
 
         PromptComposition draft = new PromptComposition();
         draft.setId(10L);
@@ -81,9 +79,7 @@ class VersionReviewServiceImplTest {
         VersionReview review = versionReviewService.submitVersion(1L, 100L);
 
         assertEquals(ReviewStatus.PENDING, review.getStatus());
-        assertEquals(1, review.getMajorVersion());
-        assertEquals(2, review.getMinorVersion());
-        assertEquals(3, review.getPatchVersion());
+        assertEquals(123, review.getVersionNo());
         assertEquals(5, review.getCompositionRevisionNo());
     }
 

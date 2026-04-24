@@ -149,6 +149,40 @@ export const versionReviewApi = {
   }
 }
 
+export const releaseApi = {
+  // 发布单列表（分页）
+  getReleases: (psuId, environment, page = 1, size = 10) => {
+    const params = { page, size }
+    if (psuId) params.psuId = psuId
+    if (environment) params.environment = environment
+    return api.get('/releases', { params })
+  },
+  // 发布单详情
+  getRelease: (releaseId) => api.get(`/releases/${releaseId}`),
+  // 创建发布单
+  createRelease: (data) => api.post('/releases', data),
+  // 提交审核
+  submitRelease: (releaseId) => api.post(`/releases/${releaseId}/submit`),
+  // 审核通过
+  approveRelease: (releaseId) => api.post(`/releases/${releaseId}/approve`),
+  // 审核驳回
+  rejectRelease: (releaseId, data) => api.post(`/releases/${releaseId}/reject`, data),
+  // 执行发布
+  executeRelease: (releaseId) => api.post(`/releases/${releaseId}/execute`),
+  // 执行回滚
+  rollbackRelease: (releaseId, data) => api.post(`/releases/${releaseId}/rollback`, data),
+  // 获取规则列表
+  getReleaseRules: (releaseId) => api.get(`/releases/${releaseId}/rules`),
+  // 新增规则
+  addReleaseRule: (releaseId, data) => api.post(`/releases/${releaseId}/rules`, data),
+  // 更新规则
+  updateReleaseRule: (releaseId, ruleId, data) => api.put(`/releases/${releaseId}/rules/${ruleId}`, data),
+  // 删除规则
+  deleteReleaseRule: (releaseId, ruleId) => api.delete(`/releases/${releaseId}/rules/${ruleId}`),
+  // 对外解析（联调验证）
+  resolvePrompt: (data) => api.post('/prompt-service/resolve', data)
+}
+
 export const configApi = {
   // 获取所有系统配置
   getAllConfigs: () => api.get('/configs'),

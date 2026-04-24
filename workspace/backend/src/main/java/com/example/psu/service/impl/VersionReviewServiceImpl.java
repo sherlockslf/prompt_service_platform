@@ -92,9 +92,7 @@ public class VersionReviewServiceImpl implements VersionReviewService {
         review.setPsuId(psuId);
         review.setSubmitterId(submitterId);
         review.setStatus(ReviewStatus.PENDING);
-        review.setMajorVersion(psu.getMajorVersion());
-        review.setMinorVersion(psu.getMinorVersion());
-        review.setPatchVersion(psu.getPatchVersion());
+        review.setVersionNo(psu.getVersionNo());
         review.setCompositionId(composition.getId());
         review.setCompositionRevisionNo(revision.getRevisionNo());
         review.setSubmittedAt(LocalDateTime.now());

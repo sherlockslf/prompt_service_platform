@@ -190,9 +190,9 @@
             <h3>审核状态</h3>
             <el-table :data="versionStatus" style="width: 100%;" v-loading="loadingVersions">
               <el-table-column prop="psuId" label="PSU ID" width="150"></el-table-column>
-              <el-table-column label="版本" width="150">
+            <el-table-column label="版本" width="150">
                 <template #default="{ row }">
-                  {{ row.majorVersion }}.{{ row.minorVersion }}.{{ row.patchVersion }}
+                  {{ row.versionNo }}
                 </template>
               </el-table-column>
               <el-table-column prop="status" label="状态" width="120">

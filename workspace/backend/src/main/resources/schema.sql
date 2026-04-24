@@ -24,9 +24,7 @@ CREATE TABLE IF NOT EXISTS ai_prompt_psu (
     description TEXT COMMENT '描述',
     status ENUM('ACTIVE', 'ARCHIVED') NOT NULL DEFAULT 'ACTIVE' COMMENT '状态',
     creator_id BIGINT NOT NULL COMMENT '创建者ID',
-    major_version INT NOT NULL DEFAULT 0 COMMENT '主版本号',
-    minor_version INT NOT NULL DEFAULT 0 COMMENT '次版本号',
-    patch_version INT NOT NULL DEFAULT 0 COMMENT '修订版本号',
+    version_no INT NOT NULL DEFAULT 1 COMMENT '版本号（单字段递增）',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     
@@ -78,9 +76,7 @@ CREATE TABLE IF NOT EXISTS ai_prompt_prompt_fragments (
 CREATE TABLE IF NOT EXISTS ai_prompt_version_reviews (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     psu_id BIGINT NOT NULL COMMENT '关联PSU ID',
-    major_version INT NOT NULL DEFAULT 1 COMMENT '主版本',
-    minor_version INT NOT NULL DEFAULT 0 COMMENT '次版本',
-    patch_version INT NOT NULL DEFAULT 0 COMMENT '修订版本',
+    version_no INT NOT NULL DEFAULT 1 COMMENT '版本号（单字段递增）',
     status ENUM('PENDING', 'APPROVED', 'REJECTED') NOT NULL DEFAULT 'PENDING' COMMENT '状态',
     submitter_id BIGINT NOT NULL COMMENT '提交者ID',
     reviewer_id BIGINT COMMENT '审核者ID',
@@ -104,7 +100,7 @@ CREATE TABLE IF NOT EXISTS ai_prompt_version_reviews (
     INDEX idx_version_reviews_git_hash (git_commit_hash),
     INDEX idx_version_reviews_comp_rev_status (composition_id, composition_revision_no, status),
     
-    CONSTRAINT uk_version_reviews_version UNIQUE (psu_id, major_version, minor_version, patch_version)
+    CONSTRAINT uk_version_reviews_version UNIQUE (psu_id, version_no)
 ) COMMENT 'AI Prompt版本审核表';
 
 -- 创建系统配置表
@@ -225,6 +221,79 @@ CREATE TABLE IF NOT EXISTS ai_prompt_test_run_items (
     INDEX idx_test_run_items_run_id (run_id),
     INDEX idx_test_run_items_case_id (case_id)
 ) COMMENT 'AI Prompt测试运行用例明细表';
+
+-- 创建发布单表
+CREATE TABLE IF NOT EXISTS ai_prompt_releases (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    psu_id BIGINT NOT NULL COMMENT '关联PSU ID',
+    environment VARCHAR(32) NOT NULL COMMENT '环境: DEV/STAGING/PROD',
+    release_type ENUM('FULL', 'CANARY') NOT NULL COMMENT '发布类型',
+    target_composition_id BIGINT NOT NULL COMMENT '目标编排ID',
+    target_revision_no INT NOT NULL COMMENT '目标快照版本号',
+    base_revision_no INT NULL COMMENT '灰度基线快照版本号',
+    status ENUM('DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'RELEASING', 'SUCCESS', 'FAILED', 'ROLLED_BACK', 'CANCELLED') NOT NULL DEFAULT 'DRAFT' COMMENT '发布状态',
+    approval_by BIGINT NULL COMMENT '审核人',
+    approved_at DATETIME NULL COMMENT '审核时间',
+    executed_by BIGINT NULL COMMENT '执行人',
+    executed_at DATETIME NULL COMMENT '执行时间',
+    rollback_to_revision_no INT NULL COMMENT '回滚目标快照版本号',
+    rollback_reason VARCHAR(500) NULL COMMENT '回滚原因',
+    created_by BIGINT NOT NULL DEFAULT 0 COMMENT '创建人',
+    updated_by BIGINT NOT NULL DEFAULT 0 COMMENT '更新人',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    INDEX idx_release_psu_env_status (psu_id, environment, status),
+    INDEX idx_release_target (target_composition_id, target_revision_no)
+) COMMENT 'AI Prompt发布单表';
+
+-- 创建发布规则表
+CREATE TABLE IF NOT EXISTS ai_prompt_release_rules (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    release_id BIGINT NOT NULL COMMENT '关联发布单ID',
+    rule_type ENUM('WHITELIST', 'TAG', 'PERCENT') NOT NULL COMMENT '规则类型',
+    rule_key VARCHAR(64) NULL COMMENT '匹配字段，如tenantId/channel/userId',
+    operator VARCHAR(16) NULL COMMENT '操作符: EQ/IN/REGEX/RANGE',
+    rule_value TEXT NULL COMMENT '规则值',
+    traffic_percent INT NULL COMMENT '流量百分比，仅PERCENT有效',
+    priority INT NOT NULL DEFAULT 100 COMMENT '优先级，越小越先匹配',
+    enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    INDEX idx_rules_release (release_id, enabled, priority)
+) COMMENT 'AI Prompt发布规则表';
+
+-- 创建环境生效指针表
+CREATE TABLE IF NOT EXISTS ai_prompt_live_versions (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    psu_id BIGINT NOT NULL COMMENT '关联PSU ID',
+    environment VARCHAR(32) NOT NULL COMMENT '环境: DEV/STAGING/PROD',
+    stable_release_id BIGINT NOT NULL COMMENT '稳定发布单ID',
+    stable_revision_no INT NOT NULL COMMENT '稳定快照版本号',
+    canary_release_id BIGINT NULL COMMENT '灰度发布单ID',
+    updated_by BIGINT NOT NULL DEFAULT 0 COMMENT '更新人',
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    UNIQUE KEY uk_live_psu_env (psu_id, environment)
+) COMMENT 'AI Prompt环境生效版本指针表';
+
+-- 创建回滚记录表
+CREATE TABLE IF NOT EXISTS ai_prompt_rollbacks (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    psu_id BIGINT NOT NULL COMMENT '关联PSU ID',
+    environment VARCHAR(32) NOT NULL COMMENT '环境: DEV/STAGING/PROD',
+    from_release_id BIGINT NOT NULL COMMENT '回滚前发布单ID',
+    from_revision_no INT NOT NULL COMMENT '回滚前快照版本号',
+    to_release_id BIGINT NOT NULL COMMENT '回滚后发布单ID',
+    to_revision_no INT NOT NULL COMMENT '回滚后快照版本号',
+    reason VARCHAR(500) NULL COMMENT '回滚原因',
+    operator_id BIGINT NOT NULL COMMENT '操作人ID',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    INDEX idx_rollbacks_psu_env (psu_id, environment),
+    INDEX idx_rollbacks_created_at (created_at)
+) COMMENT 'AI Prompt回滚记录表';
 
 -- 初始化预置用户（每种角色一个）
 INSERT IGNORE INTO ai_prompt_users (username, password, role, enabled) 

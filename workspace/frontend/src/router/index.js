@@ -3,6 +3,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 const Login = () => import('../views/auth/Login.vue')
 const AdminDashboard = () => import('../views/admin/Dashboard.vue')
 const DeveloperDashboard = () => import('../views/developer/Dashboard.vue')
+const ReleaseCenter = () => import('../views/developer/ReleaseCenter.vue')
 const BusinessDashboard = () => import('../views/business/Dashboard.vue')
 const PromptComposer = () => import('../views/business/PromptComposer.vue')
 const CompositionReview = () => import('../views/developer/CompositionReview.vue')
@@ -22,6 +23,11 @@ const routes = [
     path: '/developer',
     name: 'Developer',
     component: DeveloperDashboard
+  },
+  {
+    path: '/developer/releases',
+    name: 'ReleaseCenter',
+    component: ReleaseCenter
   },
   {
     path: '/business',

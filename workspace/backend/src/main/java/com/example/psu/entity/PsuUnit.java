@@ -42,13 +42,7 @@ public class PsuUnit {
     private Long creatorId;            // 创建者ID（研发）
     
     @Column(nullable = false)
-    private Integer majorVersion = 0;  // 主版本号
-    
-    @Column(nullable = false)
-    private Integer minorVersion = 0;  // 次版本号
-    
-    @Column(nullable = false)
-    private Integer patchVersion = 0;  // 修订版本号
+    private Integer versionNo = 1;     // 版本号（单字段递增）
     
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;   // 创建时间

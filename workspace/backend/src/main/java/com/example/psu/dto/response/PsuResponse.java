@@ -15,10 +15,8 @@ public class PsuResponse {
     private String status;
     private Long creatorId;
     private String creatorName;
-    private Integer majorVersion;
-    private Integer minorVersion;
-    private Integer patchVersion;
-    private String fullVersion;
+    private Integer versionNo;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }
+    

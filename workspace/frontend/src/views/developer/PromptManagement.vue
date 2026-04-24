@@ -21,7 +21,7 @@
           <el-option
             v-for="psu in psuList"
             :key="psu.id"
-            :label="`${psu.name} (v${psu.majorVersion}.${psu.minorVersion}.${psu.patchVersion})`"
+            :label="`${psu.name} (v${psu.versionNo ?? 1})`"
             :value="psu.id"
           />
         </el-select>
