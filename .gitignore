@@ -11,3 +11,9 @@ demo2/workspace/frontend/node_modules/.vite/deps/_metadata.json
 /prd/
 /workspace/backend/target/
 /workspace/frontend/dist/
+**/node_modules/
+**/.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
