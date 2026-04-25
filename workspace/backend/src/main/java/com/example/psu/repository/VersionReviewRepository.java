@@ -31,4 +31,13 @@ public interface VersionReviewRepository extends JpaRepository<VersionReview, Lo
         Integer compositionRevisionNo,
         ReviewStatus status
     );
+
+    boolean existsByPsuIdAndCompositionIdAndCompositionRevisionNoAndStatus(
+        Long psuId,
+        Long compositionId,
+        Integer compositionRevisionNo,
+        ReviewStatus status
+    );
+
+    Optional<VersionReview> findByPsuIdAndVersionNo(Long psuId, Integer versionNo);
 }

@@ -10,11 +10,27 @@ import static org.junit.jupiter.api.Assertions.*;
 class PsuStatusTest {
 
     @Test
-    void testFromCode_Active() {
-        PsuStatus status = PsuStatus.fromCode("ACTIVE");
-        assertEquals(PsuStatus.ACTIVE, status);
-        assertEquals("ACTIVE", status.getCode());
-        assertEquals("活跃", status.getDescription());
+    void testFromCode_Draft() {
+        PsuStatus status = PsuStatus.fromCode("DRAFT");
+        assertEquals(PsuStatus.DRAFT, status);
+        assertEquals("DRAFT", status.getCode());
+        assertEquals("草稿", status.getDescription());
+    }
+
+    @Test
+    void testFromCode_Candidate() {
+        PsuStatus status = PsuStatus.fromCode("CANDIDATE");
+        assertEquals(PsuStatus.CANDIDATE, status);
+        assertEquals("CANDIDATE", status.getCode());
+        assertEquals("发布候选", status.getDescription());
+    }
+
+    @Test
+    void testFromCode_Formal() {
+        PsuStatus status = PsuStatus.fromCode("FORMAL");
+        assertEquals(PsuStatus.FORMAL, status);
+        assertEquals("FORMAL", status.getCode());
+        assertEquals("正式版本", status.getDescription());
     }
 
     @Test

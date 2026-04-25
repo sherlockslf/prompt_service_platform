@@ -163,6 +163,17 @@
             :schema-fields="schemaFields"
           />
 
+          <div class="param-set-panel">
+            <h4>参数集（覆盖写）</h4>
+            <el-input
+              v-model="paramSetContent"
+              type="textarea"
+              :rows="6"
+              placeholder="请输入参数集JSON"
+            />
+            <el-button style="margin-top: 8px" size="small" @click="saveParamSet">保存参数集</el-button>
+          </div>
+
           <div class="action-bar">
             <el-button
               type="primary"
@@ -201,7 +212,7 @@ import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
-import { compositionApi, schemaApi, psuApi, testDatasetApi, configApi } from '@/services/api'
+import { compositionApi, schemaApi, psuApi, testDatasetApi, configApi, paramSetApi } from '@/services/api'
 import SchemaVariablePanel from '@/components/composer/SchemaVariablePanel.vue'
 import PromptTextEditor from '@/components/composer/PromptTextEditor.vue'
 import InjectionSummaryPanel from '@/components/composer/InjectionSummaryPanel.vue'
@@ -239,6 +250,8 @@ const datasets = ref([])
 const loadingDatasets = ref(false)
 const selectedDatasetId = ref(null)
 const selectedDatasetInput = ref({})
+const paramSetInput = ref({})
+const paramSetContent = ref('{}')
 const datasetPreviewExpanded = ref(false)
 const selectedModel = ref('qwen-plus')
 const dashscopeApiKey = ref('')
@@ -250,12 +263,12 @@ const editorRef = ref(null)
 const isReadonly = computed(() => status.value !== 'DRAFT')
 
 const statusTagType = computed(() => {
-  const map = { DRAFT: 'success', SUBMITTED: 'warning', DEV_REVIEWING: 'info', APPROVED: 'success', REJECTED: 'danger' }
+  const map = { DRAFT: 'success', CANDIDATE: 'warning', FORMAL: 'primary', ARCHIVED: 'info' }
   return map[status.value] || 'info'
 })
 
 const statusText = computed(() => {
-  const map = { DRAFT: '草稿', SUBMITTED: '已提交', DEV_REVIEWING: '审核中', APPROVED: '已通过', REJECTED: '已驳回' }
+  const map = { DRAFT: '草稿', CANDIDATE: '发布候选', FORMAL: '正式版本', ARCHIVED: '归档' }
   return map[status.value] || status.value
 })
 
@@ -341,6 +354,7 @@ async function initializeBySelectedPsu() {
   await loadPsuName()
   await loadComposition()
   await loadSchema()
+  await loadParamSet()
   await loadTestDatasets()
 }
 
@@ -360,6 +374,8 @@ function resetComposerState() {
   datasets.value = []
   selectedDatasetId.value = null
   selectedDatasetInput.value = {}
+  paramSetInput.value = {}
+  paramSetContent.value = '{}'
   datasetPreviewExpanded.value = false
   modelTestOutput.value = ''
   modelTestError.value = ''
@@ -425,6 +441,38 @@ async function loadTestDatasets() {
     datasets.value = []
   } finally {
     loadingDatasets.value = false
+  }
+}
+
+async function loadParamSet() {
+  if (!selectedPsuId.value) return
+  try {
+    const res = await paramSetApi.getParamSet(selectedPsuId.value)
+    const raw = res.data?.paramSetContent || '{}'
+    paramSetContent.value = formatJsonText(raw)
+    paramSetInput.value = parseJsonSafe(raw)
+  } catch (e) {
+    // 参数集允许首次为空，不阻断页面
+    paramSetContent.value = '{}'
+    paramSetInput.value = {}
+  }
+}
+
+async function saveParamSet() {
+  if (!selectedPsuId.value) {
+    ElMessage.warning('请先选择PSU')
+    return
+  }
+  try {
+    const parsed = parseJsonSafe(paramSetContent.value)
+    await paramSetApi.updateParamSet(selectedPsuId.value, {
+      paramSetContent: JSON.stringify(parsed),
+      changeLog: 'business-composer-overwrite'
+    })
+    paramSetInput.value = parsed
+    ElMessage.success('参数集已保存')
+  } catch (e) {
+    ElMessage.error(e.response?.data?.message || '参数集保存失败，请检查JSON格式')
   }
 }
 
@@ -626,8 +674,11 @@ async function runRenderPreview() {
   missingVars.value = []
   renderedPrompt.value = ''
   try {
-    // 渲染仅使用左侧选中的测试数据集入参。
-    let input = cloneObject(selectedDatasetInput.value)
+    // 渲染优先使用参数集，测试数据集作为覆盖输入。
+    let input = cloneObject(paramSetInput.value)
+    if (Object.keys(selectedDatasetInput.value || {}).length > 0) {
+      input = { ...input, ...cloneObject(selectedDatasetInput.value) }
+    }
     // 预览始终基于当前页面编辑中的文本，不依赖数据库中的草稿内容
     const preview = renderFromCurrentContent(content.value, input)
     renderedPrompt.value = preview.renderedPrompt
@@ -796,6 +847,11 @@ function formatJsonText(data) {
   }
 }
 
+function parseJsonSafe(data) {
+  if (!data) return {}
+  return typeof data === 'string' ? JSON.parse(data) : data
+}
+
 function hasUnclosedBraces(text) {
   let i = 0
   while (i < text.length) {
@@ -836,7 +892,7 @@ async function handleSubmit() {
     }
     await compositionApi.submit(selectedPsuId.value)
     ElMessage.success('提交成功，编排已锁定')
-    status.value = 'SUBMITTED'
+    status.value = 'CANDIDATE'
     hasUnsavedChanges.value = false
     const res = await compositionApi.getComposition(selectedPsuId.value)
     if (res.data) {
@@ -973,6 +1029,17 @@ function formatTime(timeStr) {
   gap: 8px;
   padding-top: 16px;
   border-top: 1px solid #e4e7ed;
+}
+
+.param-set-panel {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px dashed #dcdfe6;
+}
+
+.param-set-panel h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
 }
 
 .preview-panel {

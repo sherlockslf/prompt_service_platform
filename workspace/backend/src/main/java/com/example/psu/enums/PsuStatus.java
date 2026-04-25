@@ -4,7 +4,9 @@ package com.example.psu.enums;
  * PSU状态枚举
  */
 public enum PsuStatus {
-    ACTIVE("ACTIVE", "活跃"),
+    DRAFT("DRAFT", "草稿"),
+    CANDIDATE("CANDIDATE", "发布候选"),
+    FORMAL("FORMAL", "正式版本"),
     ARCHIVED("ARCHIVED", "已归档");
     
     private final String code;

@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS ai_prompt_psu (
     psu_id VARCHAR(100) NOT NULL UNIQUE COMMENT '全局唯一PSU ID',
     name VARCHAR(200) NOT NULL COMMENT 'PSU名称',
     description TEXT COMMENT '描述',
-    status ENUM('ACTIVE', 'ARCHIVED') NOT NULL DEFAULT 'ACTIVE' COMMENT '状态',
+    status ENUM('DRAFT', 'CANDIDATE', 'FORMAL', 'ARCHIVED') NOT NULL DEFAULT 'DRAFT' COMMENT '生命周期状态：草稿/候选/正式/归档',
     creator_id BIGINT NOT NULL COMMENT '创建者ID',
     version_no INT NOT NULL DEFAULT 1 COMMENT '版本号（单字段递增）',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -39,18 +39,35 @@ CREATE TABLE IF NOT EXISTS ai_prompt_json_schemas (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     psu_id BIGINT NOT NULL COMMENT '关联PSU ID',
     schema_content JSON NOT NULL COMMENT 'JSON Schema内容',
-    version INT NOT NULL DEFAULT 1 COMMENT '版本号',
+    version INT NOT NULL DEFAULT 1 COMMENT '兼容字段：覆盖写语义下固定为1',
     modified_by BIGINT NOT NULL COMMENT '修改者ID',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     change_log TEXT COMMENT '变更日志',
     
     INDEX idx_json_schemas_psu_id (psu_id),
-    INDEX idx_json_schemas_version (version),
     INDEX idx_json_schemas_modified_by (modified_by),
     INDEX idx_json_schemas_created (created_at),
     
-    CONSTRAINT uk_json_schemas_psu_version UNIQUE (psu_id, version)
+    CONSTRAINT uk_json_schemas_psu_id UNIQUE (psu_id)
 ) COMMENT 'AI Prompt JSON Schema表';
+
+-- 创建参数集表（覆盖写语义）
+CREATE TABLE IF NOT EXISTS ai_prompt_param_sets (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    psu_id BIGINT NOT NULL COMMENT '关联PSU ID',
+    param_set_content JSON NOT NULL COMMENT '参数集内容',
+    modified_by BIGINT NOT NULL COMMENT '修改者ID',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    change_log TEXT COMMENT '变更日志',
+    
+    INDEX idx_param_sets_psu_id (psu_id),
+    INDEX idx_param_sets_modified_by (modified_by),
+    INDEX idx_param_sets_created (created_at),
+    
+    CONSTRAINT uk_param_sets_psu_id UNIQUE (psu_id)
+) COMMENT 'AI Prompt参数集表';
 
 -- 创建Prompt片段表
 CREATE TABLE IF NOT EXISTS ai_prompt_prompt_fragments (
@@ -77,7 +94,7 @@ CREATE TABLE IF NOT EXISTS ai_prompt_version_reviews (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     psu_id BIGINT NOT NULL COMMENT '关联PSU ID',
     version_no INT NOT NULL DEFAULT 1 COMMENT '版本号（单字段递增）',
-    status ENUM('PENDING', 'APPROVED', 'REJECTED') NOT NULL DEFAULT 'PENDING' COMMENT '状态',
+    status ENUM('DRAFT', 'CANDIDATE', 'FORMAL', 'ARCHIVED') NOT NULL DEFAULT 'DRAFT' COMMENT '版本状态：草稿/候选/正式/归档',
     submitter_id BIGINT NOT NULL COMMENT '提交者ID',
     reviewer_id BIGINT COMMENT '审核者ID',
     rejection_reason TEXT COMMENT '驳回原因',
@@ -153,7 +170,7 @@ CREATE TABLE IF NOT EXISTS ai_prompt_compositions (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     psu_id BIGINT NOT NULL COMMENT '关联PSU ID',
     schema_version INT NOT NULL DEFAULT 1 COMMENT '绑定Schema版本',
-    status ENUM('DRAFT', 'SUBMITTED', 'DEV_REVIEWING', 'APPROVED', 'REJECTED') NOT NULL DEFAULT 'DRAFT' COMMENT '状态',
+    status ENUM('DRAFT', 'CANDIDATE', 'FORMAL', 'ARCHIVED') NOT NULL DEFAULT 'DRAFT' COMMENT '编排状态：草稿/候选/正式/归档',
     content LONGTEXT COMMENT '编辑器原始内容',
     spec_json LONGTEXT COMMENT '编排规格JSON',
     created_by BIGINT NOT NULL DEFAULT 0 COMMENT '创建人',
@@ -175,7 +192,7 @@ CREATE TABLE IF NOT EXISTS ai_prompt_composition_revisions (
     composition_id BIGINT NOT NULL COMMENT '关联编排ID',
     revision_no INT NOT NULL COMMENT '版本号',
     psu_id BIGINT NOT NULL COMMENT '关联PSU ID',
-    status_at_time ENUM('DRAFT', 'SUBMITTED', 'DEV_REVIEWING', 'APPROVED', 'REJECTED') NOT NULL COMMENT '状态',
+    status_at_time ENUM('DRAFT', 'CANDIDATE', 'FORMAL', 'ARCHIVED') NOT NULL COMMENT '快照状态',
     schema_version INT NOT NULL COMMENT 'Schema版本（兼容历史字段）',
     schema_version_at_time INT NOT NULL COMMENT 'Schema版本快照',
     content_snapshot LONGTEXT NOT NULL COMMENT '编排内容快照',

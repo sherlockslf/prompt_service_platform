@@ -12,6 +12,7 @@ import java.util.Optional;
  */
 @Repository
 public interface JsonSchemaRepository extends JpaRepository<JsonSchema, Long> {
+    Optional<JsonSchema> findByPsuId(Long psuId);
     
     /**
      * 根据PSU ID查找最新的Schema

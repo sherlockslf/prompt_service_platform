@@ -1,8 +1,17 @@
 package com.example.psu.controller;
 
 import com.example.psu.dto.request.ReviewRequest;
+import com.example.psu.dto.request.RollbackVersionRequest;
+import com.example.psu.dto.request.CompositionRenderRequest;
+import com.example.psu.dto.response.CompositionRenderResponse;
+import com.example.psu.dto.response.VersionCompareResponse;
+import com.example.psu.entity.ParamSet;
 import com.example.psu.entity.VersionReview;
+import com.example.psu.service.CompositionService;
+import com.example.psu.service.ParamSetService;
 import com.example.psu.service.VersionReviewService;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -27,9 +36,20 @@ public class VersionReviewController {
     private static final Long DEFAULT_OPERATOR_ID = 0L;
 
     private final VersionReviewService versionReviewService;
+    private final CompositionService compositionService;
+    private final ParamSetService paramSetService;
+    private final ObjectMapper objectMapper;
 
-    public VersionReviewController(VersionReviewService versionReviewService) {
+    public VersionReviewController(
+        VersionReviewService versionReviewService,
+        CompositionService compositionService,
+        ParamSetService paramSetService,
+        ObjectMapper objectMapper
+    ) {
         this.versionReviewService = versionReviewService;
+        this.compositionService = compositionService;
+        this.paramSetService = paramSetService;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -76,12 +96,53 @@ public class VersionReviewController {
     }
 
     /**
+     * 审核预览：使用PSU当前参数集渲染待审编排，便于在线查看请求效果
+     */
+    @GetMapping("/{reviewId}/preview")
+    public ResponseEntity<CompositionRenderResponse> previewByParamSet(@PathVariable Long reviewId) {
+        VersionReview review = versionReviewService.getVersionReviewById(reviewId)
+            .orElseThrow(() -> new IllegalArgumentException("审核记录不存在: " + reviewId));
+        ParamSet paramSet = paramSetService.getParamSetByPsuId(review.getPsuId());
+        try {
+            CompositionRenderRequest request = new CompositionRenderRequest();
+            request.setCompositionId(review.getCompositionId());
+            request.setInput(objectMapper.readValue(paramSet.getParamSetContent(), new TypeReference<Map<String, Object>>() {}));
+            return ResponseEntity.ok(compositionService.render(review.getPsuId(), request));
+        } catch (Exception e) {
+            throw new IllegalArgumentException("参数集解析失败，无法渲染预览");
+        }
+    }
+
+    /**
      * 开发侧版本审核页面/代码生成页面获取已审核通过的生成代码
      * 参数：psuId-PSU数据库ID
      */
     @GetMapping("/{psuId}/code")
     public ResponseEntity<String> getCode(@PathVariable Long psuId) {
         return ResponseEntity.ok(versionReviewService.getCode(psuId));
+    }
+
+    /**
+     * 版本对比：按versionNo对比两个版本的Prompt快照
+     */
+    @GetMapping("/{psuId}/compare")
+    public ResponseEntity<VersionCompareResponse> compareVersions(
+        @PathVariable Long psuId,
+        @RequestParam Integer fromVersionNo,
+        @RequestParam Integer toVersionNo
+    ) {
+        return ResponseEntity.ok(versionReviewService.compareVersions(psuId, fromVersionNo, toVersionNo));
+    }
+
+    /**
+     * 版本回滚：将正式版回滚到指定历史版本内容
+     */
+    @PostMapping("/{psuId}/rollback")
+    public ResponseEntity<VersionReview> rollbackVersion(
+        @PathVariable Long psuId,
+        @RequestBody RollbackVersionRequest request
+    ) {
+        return ResponseEntity.ok(versionReviewService.rollbackVersion(psuId, request, DEFAULT_OPERATOR_ID));
     }
 
     /**

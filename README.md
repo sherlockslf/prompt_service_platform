@@ -18,7 +18,7 @@
 
 ### 2.1 技术栈
 
-- 后端：Java 17、Spring Boot 3.2、Spring Data JPA、MySQL 8、Redis、Spring Security、Swagger
+- 后端：Java 17、Spring Boot 3.2、Spring Data JPA、MySQL 8、Redis（预留未启用）、Spring Security、Swagger
 - 前端：Vue 3、Element Plus、Pinia、Vue Router、Axios、Vite
 
 ### 2.2 工程目录
@@ -34,6 +34,84 @@ prompt_service_platform/
 │  └─ start-frontend.bat
 ├─ README.md
 └─ LICENSE
+```
+
+### 2.3 结构图（代码结构）
+
+```mermaid
+flowchart TB
+    A[workspace] --> B[backend]
+    A --> C[frontend]
+    A --> D[tools]
+    B --> B1[controller]
+    B --> B2[service]
+    B --> B3[repository]
+    B --> B4[entity]
+    B --> B5[resources/schema.sql]
+    C --> C1[views]
+    C --> C2[services/api.js]
+    C --> C3[components]
+    D --> D1[db_drop_existing_tables.py]
+    D --> D2[db_bootstrap_from_yml.py]
+
+    classDef root fill:#dbeafe,color:#1e3a8a,stroke:#1d4ed8;
+    classDef backend fill:#dcfce7,color:#166534,stroke:#16a34a;
+    classDef frontend fill:#fef3c7,color:#92400e,stroke:#f59e0b;
+    classDef tools fill:#f3e8ff,color:#6b21a8,stroke:#a855f7;
+    class A root;
+    class B,B1,B2,B3,B4,B5 backend;
+    class C,C1,C2,C3 frontend;
+    class D,D1,D2 tools;
+```
+
+### 2.4 部署拓扑图（运行视角）
+
+```mermaid
+flowchart LR
+    U[业务/研发用户浏览器] --> FE[Vue3 Frontend]
+    FE --> BE[Spring Boot Backend]
+    BE --> DB[(MySQL 8)]
+    BE -. 预留未启用 .-> RD[(Redis Optional)]
+    BE --> LLM[DashScope/LLM API]
+
+    classDef user fill:#e0f2fe,color:#0c4a6e,stroke:#0284c7;
+    classDef app fill:#dcfce7,color:#14532d,stroke:#22c55e;
+    classDef data fill:#fff7ed,color:#9a3412,stroke:#f97316;
+    classDef ext fill:#fee2e2,color:#7f1d1d,stroke:#ef4444;
+    class U user;
+    class FE,BE app;
+    class DB,RD data;
+    class LLM ext;
+```
+
+> 说明：Redis 当前仅为预留依赖与配置，业务代码暂未启用缓存/会话等 Redis 能力。
+
+### 2.5 核心调用时序图（提审-审核-发布-解析）
+
+```mermaid
+sequenceDiagram
+    participant Biz as 业务端
+    participant FE as Frontend
+    participant BE as Backend
+    participant DB as MySQL
+    participant LLM as LLM API
+
+    Biz->>FE: 编辑 Prompt 编排
+    FE->>BE: 保存草稿 /api/compositions
+    BE->>DB: 写入 ai_prompt_compositions
+    FE->>BE: 提交审核 /api/compositions/submit
+    BE->>DB: 写 revision + version_review(CANDIDATE)
+    FE->>BE: 审核预览 /api/versions/{reviewId}/preview
+    BE->>DB: 读取参数集 + 编排快照
+    BE-->>FE: 返回 renderedPrompt/missingVars
+    FE->>BE: 审核通过 /api/versions/{reviewId}/review
+    BE->>DB: version_review=FORMAL + psu=FORMAL
+    FE->>BE: 创建并执行发布 /api/releases/*
+    BE->>DB: 更新 live_versions 指针
+    FE->>BE: 线上解析 /api/prompt-service/resolve
+    BE->>DB: 路由命中稳定/灰度版本
+    BE-->>FE: 返回 releaseId/revisionNo
+    FE->>LLM: 使用渲染 Prompt 调用模型
 ```
 
 ## 3. 五大模块与完成度
@@ -52,7 +130,7 @@ prompt_service_platform/
 
 ### 4.1 模块1：提示词模板编辑与调试（已实现部分）
 
-- 编排草稿管理：`DRAFT -> SUBMITTED -> APPROVED/REJECTED` 状态流已实现
+- 编排草稿管理：`DRAFT -> CANDIDATE -> FORMAL -> ARCHIVED` 生命周期已收敛
 - 占位符协议：支持 `{{path}}` 变量提取与注入计划校验
 - Schema 字段存在性校验：保存与提交时会对变量路径做检查
 - 渲染预览：支持根据输入参数替换变量并返回缺失变量列表
@@ -60,15 +138,17 @@ prompt_service_platform/
 
 ### 4.2 模块2：对外提示词服务与版本治理（已实现部分）
 
-- 版本提审与审核：支持 `submit`、`review`、`APPROVED/REJECTED`
+- 版本提审与审核：支持 `submit`、`review`、`CANDIDATE/FORMAL/ARCHIVED`
 - 审核快照：支持编排 revision 快照记录
 - 驳回分流：支持 `BACK_TO_DEV` 与 `BACK_TO_BIZ`
 - 代码生成入口：审核通过后可拉取生成代码文本
+- 版本对比与回滚：支持按 `version_no` 对比与内容回滚
 - 发布域数据模型骨架：已新增发布单、发布规则、生效版本指针、回滚记录表与后端实体仓储
 
 ### 4.3 模块3：Schema + 测试集（已实现部分）
 
-- Schema 版本管理：按 PSU 保存历史版本并递增
+- Schema 覆盖写管理：按 PSU 维护当前生效 Schema（兼容字段保留）
+- 参数集覆盖写管理：按 PSU 维护当前参数集，并用于审核预览
 - 测试集管理：支持数据集创建、更新、删除、列表查询
 - 测试运行记录：保存 run 主记录和 case 明细（输入、渲染结果、耗时）
 
@@ -121,7 +201,7 @@ prompt_service_platform/
 - Maven 3.8+
 - Node.js 16+
 - MySQL 8
-- Redis
+- Redis（可选，当前未启用）
 
 ### 6.2 启动方式
 
@@ -152,7 +232,7 @@ npm run dev
 ### 6.4 数据库工具（版本号改单字段后）
 
 - 删除库中已有表：`workspace/tools/db_drop_existing_tables.py`
-- 初始化表结构并初始化原始数据：`workspace/tools/db_init_schema_and_seed.py`
+- 初始化表结构并初始化原始数据：`workspace/tools/db_bootstrap_from_yml.py`
 
 运行前需配置环境变量：
 

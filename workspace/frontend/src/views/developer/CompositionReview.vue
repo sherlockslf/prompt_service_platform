@@ -18,6 +18,17 @@
 
       <h4 style="margin-top: 16px">编排内容（只读）</h4>
       <el-input v-model="content" type="textarea" :rows="12" readonly />
+
+      <h4 style="margin-top: 16px">参数集预览效果</h4>
+      <el-button type="primary" size="small" :loading="previewing" @click="loadPreviewByParamSet">按参数集渲染</el-button>
+      <el-alert
+        v-if="missingVars.length"
+        style="margin-top: 8px"
+        type="warning"
+        :closable="false"
+        :title="`缺失变量: ${missingVars.join(', ')}`"
+      />
+      <el-input v-model="previewPrompt" style="margin-top: 8px" type="textarea" :rows="8" readonly />
     </el-card>
   </div>
 </template>
@@ -33,17 +44,20 @@ const psuId = computed(() => Number(route.params.psuId))
 const reviewId = computed(() => Number(route.params.reviewId))
 
 const loading = ref(false)
+const previewing = ref(false)
 const review = ref(null)
 const content = ref('')
 const compositionStatus = ref('DRAFT')
+const previewPrompt = ref('')
+const missingVars = ref([])
 
 const statusTagType = computed(() => {
-  const map = { DRAFT: 'info', SUBMITTED: 'warning', DEV_REVIEWING: 'primary', APPROVED: 'success', REJECTED: 'danger' }
+  const map = { DRAFT: 'info', CANDIDATE: 'warning', FORMAL: 'success', ARCHIVED: 'info' }
   return map[compositionStatus.value] || 'info'
 })
 
 const statusText = computed(() => {
-  const map = { DRAFT: '草稿', SUBMITTED: '已提交', DEV_REVIEWING: '研发审核中', APPROVED: '已通过', REJECTED: '已驳回' }
+  const map = { DRAFT: '草稿', CANDIDATE: '发布候选', FORMAL: '正式版本', ARCHIVED: '归档' }
   return map[compositionStatus.value] || compositionStatus.value
 })
 
@@ -63,6 +77,19 @@ onMounted(async () => {
     loading.value = false
   }
 })
+
+const loadPreviewByParamSet = async () => {
+  previewing.value = true
+  try {
+    const res = await versionReviewApi.previewByParamSet(reviewId.value)
+    previewPrompt.value = res.data?.renderedPrompt || ''
+    missingVars.value = Array.isArray(res.data?.missingVars) ? res.data.missingVars : []
+  } catch (e) {
+    ElMessage.error(e.response?.data?.message || '按参数集渲染失败')
+  } finally {
+    previewing.value = false
+  }
+}
 </script>
 
 <style scoped>

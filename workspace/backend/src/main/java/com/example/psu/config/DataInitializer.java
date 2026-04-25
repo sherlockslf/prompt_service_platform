@@ -10,7 +10,6 @@ import com.example.psu.enums.CompositionStatus;
 import com.example.psu.enums.FragmentType;
 import com.example.psu.enums.ReviewStatus;
 import com.example.psu.enums.UserRole;
-import com.example.psu.enums.RejectionType;
 import com.example.psu.repository.PromptFragmentRepository;
 import com.example.psu.repository.PromptCompositionRepository;
 import com.example.psu.repository.PsuRepository;
@@ -167,7 +166,7 @@ public class DataInitializer implements CommandLineRunner {
                     composition.setStatus(targetStatus);
                     needUpdate = true;
                 }
-                if (latestReview.getStatus() == ReviewStatus.REJECTED) {
+                if (latestReview.getStatus() == ReviewStatus.ARCHIVED) {
                     composition.setRejectionReason(latestReview.getRejectionReason());
                     composition.setRejectionType(latestReview.getRejectionType());
                     needUpdate = true;
@@ -190,16 +189,14 @@ public class DataInitializer implements CommandLineRunner {
     }
     
     private CompositionStatus mapReviewToCompositionStatus(VersionReview review) {
-        if (review.getStatus() == ReviewStatus.APPROVED) {
-            return CompositionStatus.APPROVED;
+        if (review.getStatus() == ReviewStatus.FORMAL) {
+            return CompositionStatus.FORMAL;
         }
-        if (review.getStatus() == ReviewStatus.PENDING) {
-            return CompositionStatus.SUBMITTED;
+        if (review.getStatus() == ReviewStatus.CANDIDATE) {
+            return CompositionStatus.CANDIDATE;
         }
-        if (review.getStatus() == ReviewStatus.REJECTED) {
-            return review.getRejectionType() == RejectionType.BACK_TO_BIZ
-                ? CompositionStatus.DRAFT
-                : CompositionStatus.REJECTED;
+        if (review.getStatus() == ReviewStatus.ARCHIVED) {
+            return CompositionStatus.ARCHIVED;
         }
         return CompositionStatus.DRAFT;
     }

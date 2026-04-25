@@ -7,13 +7,16 @@ import com.example.psu.dto.response.CompositionValidateResponse;
 import com.example.psu.entity.JsonSchema;
 import com.example.psu.entity.PromptComposition;
 import com.example.psu.entity.PromptCompositionRevision;
+import com.example.psu.entity.PsuUnit;
 import com.example.psu.enums.CompositionStatus;
+import com.example.psu.enums.PsuStatus;
 import com.example.psu.enums.RejectionType;
 import com.example.psu.exception.BusinessException;
 import com.example.psu.exception.ErrorCode;
 import com.example.psu.repository.JsonSchemaRepository;
 import com.example.psu.repository.PromptCompositionRepository;
 import com.example.psu.repository.PromptCompositionRevisionRepository;
+import com.example.psu.repository.PsuRepository;
 import com.example.psu.service.CompositionService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -44,17 +47,20 @@ public class CompositionServiceImpl implements CompositionService {
     private final PromptCompositionRepository compositionRepository;
     private final PromptCompositionRevisionRepository revisionRepository;
     private final JsonSchemaRepository jsonSchemaRepository;
+    private final PsuRepository psuRepository;
     private final ObjectMapper objectMapper;
 
     public CompositionServiceImpl(
         PromptCompositionRepository compositionRepository,
         PromptCompositionRevisionRepository revisionRepository,
         JsonSchemaRepository jsonSchemaRepository,
+        PsuRepository psuRepository,
         ObjectMapper objectMapper
     ) {
         this.compositionRepository = compositionRepository;
         this.revisionRepository = revisionRepository;
         this.jsonSchemaRepository = jsonSchemaRepository;
+        this.psuRepository = psuRepository;
         this.objectMapper = objectMapper;
     }
 
@@ -65,6 +71,7 @@ public class CompositionServiceImpl implements CompositionService {
 
     @Override
     public PromptComposition saveDraft(Long psuId, CompositionSaveRequest request, Long userId) {
+        assertDraftLifecycle(psuId);
         if (request == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "请求体不能为空");
         }
@@ -191,6 +198,7 @@ public class CompositionServiceImpl implements CompositionService {
 
     @Override
     public PromptComposition submit(Long psuId, Long userId) {
+        assertDraftLifecycle(psuId);
         PromptComposition composition = compositionRepository.findByPsuId(psuId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "编排不存在"));
 
@@ -205,7 +213,7 @@ public class CompositionServiceImpl implements CompositionService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, firstError);
         }
 
-        composition.setStatus(CompositionStatus.SUBMITTED);
+        composition.setStatus(CompositionStatus.CANDIDATE);
         composition.setUpdatedBy(userId);
         PromptComposition saved = compositionRepository.save(composition);
         createRevisionSnapshot(saved, userId);
@@ -253,6 +261,15 @@ public class CompositionServiceImpl implements CompositionService {
         return jsonSchemaRepository.findTopByPsuIdOrderByVersionDesc(psuId)
             .map(JsonSchema::getVersion)
             .orElse(1);
+    }
+
+    private void assertDraftLifecycle(Long psuId) {
+        // 生命周期约束：仅草稿允许编辑和提审编排
+        PsuUnit psu = psuRepository.findById(psuId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.PSU_NOT_FOUND, "PSU不存在"));
+        if (psu.getStatus() != PsuStatus.DRAFT) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "当前PSU为只读状态，仅草稿可编辑编排");
+        }
     }
 
     private String writeSpecJson(CompositionSaveRequest request) {

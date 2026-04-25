@@ -64,7 +64,7 @@ class PsuServiceTest {
         testPsu.setPsuId("test_psu_001");
         testPsu.setName("测试PSU");
         testPsu.setDescription("这是一个测试PSU");
-        testPsu.setStatus(PsuStatus.ACTIVE);
+        testPsu.setStatus(PsuStatus.DRAFT);
         testPsu.setCreatorId(1L);
         testPsu.setVersionNo(1);
         testPsu.setCreatedAt(LocalDateTime.now());
@@ -89,7 +89,7 @@ class PsuServiceTest {
         // 验证结果
         assertNotNull(result);
         assertEquals("test_psu_001", result.getPsuId());
-        assertEquals(PsuStatus.ACTIVE, result.getStatus());
+        assertEquals(PsuStatus.DRAFT, result.getStatus());
         assertEquals(1L, result.getCreatorId());
 
         // 验证mock调用
@@ -203,11 +203,23 @@ class PsuServiceTest {
         assertEquals(1L, response.getId());
         assertEquals("test_psu_001", response.getPsuId());
         assertEquals("测试PSU", response.getName());
-        assertEquals("ACTIVE", response.getStatus());
+        assertEquals("DRAFT", response.getStatus());
         assertEquals(1, response.getVersionNo());
         assertEquals("dev_user", response.getCreatorName());
 
         // 验证mock调用
         verify(userRepository, times(1)).findById(1L);
+    }
+
+    @Test
+    void testDeletePsu_FormalShouldFail() {
+        testPsu.setStatus(PsuStatus.FORMAL);
+        when(psuRepository.findById(1L)).thenReturn(Optional.of(testPsu));
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> psuService.deletePsu(1L));
+
+        assertEquals(ErrorCode.BAD_REQUEST.getCode(), exception.getCode());
+        assertTrue(exception.getMessage().contains("正式版本PSU不允许删除"));
+        verify(psuRepository, never()).save(any(PsuUnit.class));
     }
 }

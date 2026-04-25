@@ -8,10 +8,13 @@ import com.example.psu.entity.JsonSchema;
 import com.example.psu.entity.PromptComposition;
 import com.example.psu.entity.PromptCompositionRevision;
 import com.example.psu.enums.CompositionStatus;
+import com.example.psu.enums.PsuStatus;
 import com.example.psu.exception.BusinessException;
 import com.example.psu.repository.JsonSchemaRepository;
 import com.example.psu.repository.PromptCompositionRepository;
 import com.example.psu.repository.PromptCompositionRevisionRepository;
+import com.example.psu.repository.PsuRepository;
+import com.example.psu.entity.PsuUnit;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,6 +43,9 @@ class CompositionServiceImplTest {
     @Mock
     private JsonSchemaRepository jsonSchemaRepository;
 
+    @Mock
+    private PsuRepository psuRepository;
+
     @InjectMocks
     private CompositionServiceImpl compositionService;
 
@@ -49,15 +55,19 @@ class CompositionServiceImplTest {
             compositionRepository,
             revisionRepository,
             jsonSchemaRepository,
+            psuRepository,
             new ObjectMapper()
         );
     }
 
     @Test
     void saveDraft_shouldThrowWhenCompositionLocked() {
+        PsuUnit psu = new PsuUnit();
+        psu.setId(1L);
+        psu.setStatus(PsuStatus.DRAFT);
         PromptComposition existing = new PromptComposition();
         existing.setPsuId(1L);
-        existing.setStatus(CompositionStatus.SUBMITTED);
+        existing.setStatus(CompositionStatus.CANDIDATE);
 
         CompositionSaveRequest request = new CompositionSaveRequest();
         request.setContent("hello {{userId}}");
@@ -66,6 +76,7 @@ class CompositionServiceImplTest {
         JsonSchema schema = new JsonSchema();
         schema.setSchemaContent("{\"type\":\"object\",\"properties\":{\"userId\":{\"type\":\"string\"}}}");
 
+        when(psuRepository.findById(1L)).thenReturn(Optional.of(psu));
         when(compositionRepository.findByPsuId(1L)).thenReturn(Optional.of(existing));
         when(jsonSchemaRepository.findTopByPsuIdOrderByVersionDesc(1L)).thenReturn(Optional.of(schema));
 
@@ -91,6 +102,9 @@ class CompositionServiceImplTest {
 
     @Test
     void submit_shouldUpdateStatusAndCreateSnapshot() {
+        PsuUnit psu = new PsuUnit();
+        psu.setId(1L);
+        psu.setStatus(PsuStatus.DRAFT);
         PromptComposition composition = new PromptComposition();
         composition.setId(10L);
         composition.setPsuId(1L);
@@ -102,6 +116,7 @@ class CompositionServiceImplTest {
         JsonSchema schema = new JsonSchema();
         schema.setSchemaContent("{\"type\":\"object\",\"properties\":{\"userId\":{\"type\":\"string\"}}}");
 
+        when(psuRepository.findById(1L)).thenReturn(Optional.of(psu));
         when(compositionRepository.findByPsuId(1L)).thenReturn(Optional.of(composition));
         when(jsonSchemaRepository.findTopByPsuIdOrderByVersionDesc(1L)).thenReturn(Optional.of(schema));
         when(compositionRepository.save(any(PromptComposition.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -110,7 +125,7 @@ class CompositionServiceImplTest {
 
         PromptComposition result = compositionService.submit(1L, 99L);
 
-        assertEquals(CompositionStatus.SUBMITTED, result.getStatus());
+        assertEquals(CompositionStatus.CANDIDATE, result.getStatus());
         assertEquals(99L, result.getUpdatedBy());
     }
 

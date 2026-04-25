@@ -10,9 +10,12 @@ import com.example.psu.entity.PromptLiveVersion;
 import com.example.psu.entity.PromptRelease;
 import com.example.psu.entity.PromptReleaseRule;
 import com.example.psu.entity.PromptRollbackRecord;
+import com.example.psu.entity.PsuUnit;
+import com.example.psu.enums.PsuStatus;
 import com.example.psu.enums.ReleaseRuleType;
 import com.example.psu.enums.ReleaseStatus;
 import com.example.psu.enums.ReleaseType;
+import com.example.psu.enums.ReviewStatus;
 import com.example.psu.enums.RuleOperator;
 import com.example.psu.repository.PromptCompositionRevisionRepository;
 import com.example.psu.repository.PromptLiveVersionRepository;
@@ -20,6 +23,7 @@ import com.example.psu.repository.PromptReleaseRepository;
 import com.example.psu.repository.PromptReleaseRuleRepository;
 import com.example.psu.repository.PromptRollbackRecordRepository;
 import com.example.psu.repository.PsuRepository;
+import com.example.psu.repository.VersionReviewRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -43,6 +47,7 @@ public class ReleaseService {
     private final PromptRollbackRecordRepository promptRollbackRecordRepository;
     private final PromptCompositionRevisionRepository promptCompositionRevisionRepository;
     private final PsuRepository psuRepository;
+    private final VersionReviewRepository versionReviewRepository;
 
     public ReleaseService(
         PromptReleaseRepository promptReleaseRepository,
@@ -50,7 +55,8 @@ public class ReleaseService {
         PromptLiveVersionRepository promptLiveVersionRepository,
         PromptRollbackRecordRepository promptRollbackRecordRepository,
         PromptCompositionRevisionRepository promptCompositionRevisionRepository,
-        PsuRepository psuRepository
+        PsuRepository psuRepository,
+        VersionReviewRepository versionReviewRepository
     ) {
         this.promptReleaseRepository = promptReleaseRepository;
         this.promptReleaseRuleRepository = promptReleaseRuleRepository;
@@ -58,6 +64,7 @@ public class ReleaseService {
         this.promptRollbackRecordRepository = promptRollbackRecordRepository;
         this.promptCompositionRevisionRepository = promptCompositionRevisionRepository;
         this.psuRepository = psuRepository;
+        this.versionReviewRepository = versionReviewRepository;
     }
 
     public Page<PromptRelease> getReleases(Long psuId, String environment, Pageable pageable) {
@@ -77,11 +84,23 @@ public class ReleaseService {
 
     public PromptRelease createRelease(CreateReleaseRequest request, Long operatorId) {
         validateCreateRequest(request);
-        psuRepository.findById(request.getPsuId())
+        PsuUnit psu = psuRepository.findById(request.getPsuId())
             .orElseThrow(() -> new IllegalArgumentException("PSU不存在: " + request.getPsuId()));
+        if (psu.getStatus() != PsuStatus.FORMAL) {
+            throw new IllegalArgumentException("仅正式版本PSU允许创建发布单");
+        }
         promptCompositionRevisionRepository
             .findByCompositionIdAndRevisionNo(request.getTargetCompositionId(), request.getTargetRevisionNo())
             .orElseThrow(() -> new IllegalArgumentException("目标快照不存在"));
+        boolean approvedTarget = versionReviewRepository.existsByPsuIdAndCompositionIdAndCompositionRevisionNoAndStatus(
+            request.getPsuId(),
+            request.getTargetCompositionId(),
+            request.getTargetRevisionNo(),
+            ReviewStatus.FORMAL
+        );
+        if (!approvedTarget) {
+            throw new IllegalArgumentException("目标版本未审核通过，不允许发布");
+        }
 
         PromptRelease release = new PromptRelease();
         release.setPsuId(request.getPsuId());
@@ -172,6 +191,10 @@ public class ReleaseService {
 
     public PromptRelease rollback(Long releaseId, RollbackReleaseRequest request, Long operatorId) {
         PromptRelease release = getRelease(releaseId);
+        // 仅成功发布后的单据允许回滚，避免草稿/审核态误操作。
+        if (release.getStatus() != ReleaseStatus.SUCCESS) {
+            throw new IllegalArgumentException("仅SUCCESS状态发布单允许回滚");
+        }
         Integer targetRevisionNo = request == null ? null : request.getTargetRevisionNo();
         if (targetRevisionNo == null) {
             throw new IllegalArgumentException("回滚目标版本号不能为空");
@@ -257,6 +280,11 @@ public class ReleaseService {
     public ResolvePromptResponse resolve(ResolvePromptRequest request) {
         if (request == null || request.getPsuId() == null || request.getEnvironment() == null) {
             throw new IllegalArgumentException("psuId/environment不能为空");
+        }
+        PsuUnit psu = psuRepository.findById(request.getPsuId())
+            .orElseThrow(() -> new IllegalArgumentException("PSU不存在"));
+        if (psu.getStatus() != PsuStatus.FORMAL) {
+            throw new IllegalArgumentException("仅正式版本PSU可对外提供服务");
         }
         PromptLiveVersion live = promptLiveVersionRepository
             .findByPsuIdAndEnvironment(request.getPsuId(), request.getEnvironment().trim().toUpperCase())

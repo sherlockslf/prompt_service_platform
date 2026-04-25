@@ -45,7 +45,7 @@ public class PsuService {
         psu.setPsuId(request.getPsuId());
         psu.setName(request.getName());
         psu.setDescription(request.getDescription());
-        psu.setStatus(PsuStatus.ACTIVE);
+        psu.setStatus(PsuStatus.DRAFT);
         psu.setCreatorId(creatorId);
         
         return psuRepository.save(psu);
@@ -74,9 +74,9 @@ public class PsuService {
         PsuUnit psu = psuRepository.findById(id)
             .orElseThrow(() -> new BusinessException(ErrorCode.PSU_NOT_FOUND, "PSU不存在，ID: " + id));
         
-        // 检查是否已归档
-        if (psu.getStatus() == PsuStatus.ARCHIVED) {
-            throw new BusinessException(ErrorCode.PSU_ARCHIVED, "PSU已归档，无法修改");
+        // 仅草稿允许编辑，候选/正式/归档均只读
+        if (psu.getStatus() != PsuStatus.DRAFT) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "仅草稿状态允许编辑");
         }
         
         // 更新字段
@@ -114,7 +114,10 @@ public class PsuService {
         PsuUnit psu = psuRepository.findById(id)
             .orElseThrow(() -> new BusinessException(ErrorCode.PSU_NOT_FOUND, "PSU不存在，ID: " + id));
         
-        // 软删除：将状态改为ARCHIVED
+        // 正式版禁止删除；非正式状态统一归档
+        if (psu.getStatus() == PsuStatus.FORMAL) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "正式版本PSU不允许删除");
+        }
         psu.setStatus(PsuStatus.ARCHIVED);
         psuRepository.save(psu);
     }

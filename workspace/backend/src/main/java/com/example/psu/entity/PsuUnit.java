@@ -36,7 +36,7 @@ public class PsuUnit {
     
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private PsuStatus status;          // 状态：ACTIVE/ARCHIVED
+    private PsuStatus status;          // 状态：DRAFT/CANDIDATE/FORMAL/ARCHIVED
     
     @Column(nullable = false)
     private Long creatorId;            // 创建者ID（研发）

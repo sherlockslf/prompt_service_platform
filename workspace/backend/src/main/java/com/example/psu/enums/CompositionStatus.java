@@ -5,8 +5,7 @@ package com.example.psu.enums;
  */
 public enum CompositionStatus {
     DRAFT,
-    SUBMITTED,
-    DEV_REVIEWING,
-    APPROVED,
-    REJECTED
+    CANDIDATE,
+    FORMAL,
+    ARCHIVED
 }

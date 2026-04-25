@@ -3,6 +3,7 @@ package com.example.psu.service;
 import com.example.psu.dto.request.CreatePromptRequest;
 import com.example.psu.entity.PromptFragment;
 import com.example.psu.entity.PsuUnit;
+import com.example.psu.enums.PsuStatus;
 import com.example.psu.repository.PromptFragmentRepository;
 import com.example.psu.repository.PsuRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,8 +47,9 @@ public class PromptService {
      */
     public PromptFragment createPromptFragment(CreatePromptRequest request, Long userId) {
         // 检查PSU是否存在
-        psuRepository.findById(request.getPsuId())
+        PsuUnit psu = psuRepository.findById(request.getPsuId())
                 .orElseThrow(() -> new RuntimeException("PSU not found: " + request.getPsuId()));
+        assertDraftEditable(psu);
         
         // 检查fragmentKey是否已存在
         Optional<PromptFragment> existingFragment = promptFragmentRepository
@@ -83,6 +85,10 @@ public class PromptService {
         PromptFragment fragment = promptFragmentRepository.findById(fragmentId)
                 .orElseThrow(() -> new RuntimeException("Prompt fragment not found: " + fragmentId));
 
+        PsuUnit psu = psuRepository.findById(fragment.getPsuId())
+                .orElseThrow(() -> new RuntimeException("PSU not found: " + fragment.getPsuId()));
+        assertDraftEditable(psu);
+
         // 已定版的Prompt（editable=false）所有人不可修改
         if (!fragment.getEditable()) {
             throw new RuntimeException("Prompt已定版，不允许修改");
@@ -95,9 +101,6 @@ public class PromptService {
         
         // 更新PSU版本号（单字段递增）
         // 获取对应的PSU并更新版本
-        PsuUnit psu = psuRepository.findById(fragment.getPsuId())
-                .orElseThrow(() -> new RuntimeException("PSU not found: " + fragment.getPsuId()));
-        
         psu.setVersionNo(psu.getVersionNo() + 1); // 版本号递增
         psuRepository.save(psu);
         
@@ -113,6 +116,10 @@ public class PromptService {
         // 获取片段
         PromptFragment fragment = promptFragmentRepository.findById(fragmentId)
                 .orElseThrow(() -> new RuntimeException("Prompt fragment not found: " + fragmentId));
+
+        PsuUnit psu = psuRepository.findById(fragment.getPsuId())
+                .orElseThrow(() -> new RuntimeException("PSU not found: " + fragment.getPsuId()));
+        assertDraftEditable(psu);
 
         // 已定版的Prompt不能删除
         if (!fragment.getEditable()) {
@@ -132,6 +139,10 @@ public class PromptService {
         // 获取片段
         PromptFragment fragment = promptFragmentRepository.findById(fragmentId)
                 .orElseThrow(() -> new RuntimeException("Prompt fragment not found: " + fragmentId));
+
+        PsuUnit psu = psuRepository.findById(fragment.getPsuId())
+                .orElseThrow(() -> new RuntimeException("PSU not found: " + fragment.getPsuId()));
+        assertDraftEditable(psu);
 
         // 如果已经定版，不允许重复定版
         if (!fragment.getEditable()) {
@@ -188,5 +199,12 @@ public class PromptService {
         }
         
         return sb.toString().trim();
+    }
+
+    private void assertDraftEditable(PsuUnit psu) {
+        // 生命周期约束：仅草稿允许编辑Prompt内容
+        if (psu.getStatus() != PsuStatus.DRAFT) {
+            throw new RuntimeException("当前PSU为只读状态，仅草稿可编辑");
+        }
     }
 }

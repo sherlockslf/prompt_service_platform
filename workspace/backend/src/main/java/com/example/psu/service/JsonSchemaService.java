@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 
 import com.example.psu.entity.JsonSchema;
 import com.example.psu.entity.PsuUnit;
+import com.example.psu.enums.PsuStatus;
 import com.example.psu.repository.JsonSchemaRepository;
 import com.example.psu.repository.PsuRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -38,7 +39,7 @@ public class JsonSchemaService {
         psuRepository.findById(psuId)
                 .orElseThrow(() -> new RuntimeException("PSU not found: " + psuId));
 
-        return jsonSchemaRepository.findTopByPsuIdOrderByVersionDesc(psuId)
+        return jsonSchemaRepository.findByPsuId(psuId)
                 .orElseThrow(() -> new RuntimeException("Schema not found for PSU: " + psuId));
     }
     
@@ -54,6 +55,9 @@ public class JsonSchemaService {
         // 检查PSU是否存在
         PsuUnit psu = psuRepository.findById(psuId)
                 .orElseThrow(() -> new RuntimeException("PSU not found: " + psuId));
+        if (psu.getStatus() != PsuStatus.DRAFT) {
+            throw new RuntimeException("当前PSU为只读状态，仅草稿可编辑Schema");
+        }
         
         // 验证Schema格式
         try {
@@ -62,20 +66,19 @@ public class JsonSchemaService {
             throw new RuntimeException("Invalid JSON Schema format");
         }
         
-        // 获取当前最高版本号
-        JsonSchema latestSchema = jsonSchemaRepository.findTopByPsuIdOrderByVersionDesc(psuId).orElse(null);
-        int newVersion = latestSchema != null ? latestSchema.getVersion() + 1 : 1;
-        
-        // 创建新的Schema版本
-        JsonSchema newSchema = new JsonSchema();
-        newSchema.setPsuId(psuId);
-        newSchema.setSchemaContent(schemaContent);
-        newSchema.setVersion(newVersion);
-        newSchema.setModifiedBy(userId == null ? 0L : userId);
-        newSchema.setChangeLog(changeLog);
-        newSchema.setCreatedAt(LocalDateTime.now());
-        
-        JsonSchema savedSchema = jsonSchemaRepository.save(newSchema);
+        // 覆盖写语义：同一PSU只保留一条Schema记录
+        JsonSchema schema = jsonSchemaRepository.findByPsuId(psuId).orElseGet(() -> {
+            JsonSchema created = new JsonSchema();
+            created.setPsuId(psuId);
+            created.setCreatedAt(LocalDateTime.now());
+            return created;
+        });
+        schema.setSchemaContent(schemaContent);
+        schema.setVersion(1); // 兼容保留字段，固定为1
+        schema.setModifiedBy(userId == null ? 0L : userId);
+        schema.setChangeLog(changeLog);
+
+        JsonSchema savedSchema = jsonSchemaRepository.save(schema);
         
         // 更新PSU版本号（单字段递增）
         psu.setVersionNo(psu.getVersionNo() + 1);
@@ -90,6 +93,9 @@ public class JsonSchemaService {
      * @return Schema版本列表
      */
     public List<JsonSchema> getSchemaVersions(Long psuId) {
-        return jsonSchemaRepository.findByPsuIdOrderByVersionDesc(psuId);
+        // 兼容旧接口：覆盖写模式下仅返回当前一条
+        return jsonSchemaRepository.findByPsuId(psuId)
+                .map(List::of)
+                .orElse(List.of());
     }
 }

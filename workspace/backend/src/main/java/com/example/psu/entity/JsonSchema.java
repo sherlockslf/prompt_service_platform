@@ -39,11 +39,20 @@ public class JsonSchema {
     
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;   // 创建时间
+
+    @Column(nullable = false)
+    private LocalDateTime updatedAt;   // 更新时间
     
     private String changeLog;          // 变更日志
     
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
+        updatedAt = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = LocalDateTime.now();
     }
 }

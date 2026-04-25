@@ -7,8 +7,8 @@
           <el-button 
             type="primary" 
             @click="createNewPrompt" 
-            :disabled="!selectedPsuId"
-            :title="selectedPsuId ? '为选定的PSU添加新的Prompt片段' : '请先选择一个PSU'"
+            :disabled="!selectedPsuId || selectedPsuStatus !== 'DRAFT'"
+            :title="!selectedPsuId ? '请先选择一个PSU' : (selectedPsuStatus === 'DRAFT' ? '为选定的PSU添加新的Prompt片段' : '仅草稿状态允许编辑')"
           >
             新建Prompt片段
           </el-button>
@@ -68,15 +68,15 @@
         <el-table-column prop="sortOrder" label="排序" width="80" />
         <el-table-column label="操作" width="200">
           <template #default="{ row }">
-            <el-button size="small" @click="editPrompt(row)">编辑</el-button>
+            <el-button size="small" @click="editPrompt(row)" :disabled="selectedPsuStatus !== 'DRAFT'">编辑</el-button>
             <el-button 
               size="small" 
-              :disabled="!row.editable" 
+              :disabled="!row.editable || selectedPsuStatus !== 'DRAFT'" 
               @click="finalizePrompt(row)"
             >
               定版
             </el-button>
-            <el-button size="small" type="danger" @click="deletePrompt(row)">删除</el-button>
+            <el-button size="small" type="danger" @click="deletePrompt(row)" :disabled="selectedPsuStatus !== 'DRAFT'">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -158,6 +158,7 @@ import PromptTextEditor from '@/components/composer/PromptTextEditor.vue'
 
 // 响应式数据
 const selectedPsuId = ref(null)
+const selectedPsuStatus = ref('')
 const psuList = ref([])
 const promptFragments = ref([])
 const schemaInfo = ref(null)
@@ -190,6 +191,7 @@ const loadPsuList = async () => {
 
 // PSU变化时加载对应的Prompt片段和Schema
 const onPsuChange = async () => {
+  selectedPsuStatus.value = (psuList.value.find(item => item.id === selectedPsuId.value)?.status) || ''
   if (selectedPsuId.value && isValidPsuId(selectedPsuId.value)) {
     await Promise.all([
       loadPromptFragments(),

@@ -4,9 +4,10 @@ package com.example.psu.enums;
  * 版本审核状态枚举
  */
 public enum ReviewStatus {
-    PENDING("PENDING", "待审核"),
-    APPROVED("APPROVED", "审核通过"),
-    REJECTED("REJECTED", "审核驳回");
+    DRAFT("DRAFT", "草稿"),
+    CANDIDATE("CANDIDATE", "发布候选"),
+    FORMAL("FORMAL", "正式版本"),
+    ARCHIVED("ARCHIVED", "已归档");
     
     private final String code;
     private final String description;

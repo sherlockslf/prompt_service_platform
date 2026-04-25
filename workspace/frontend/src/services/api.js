@@ -49,12 +49,29 @@ export const schemaApi = {
     }
     return api.put(`/schemas/${psuId}`, data);
   },
-  // 获取Schema版本历史
+  // 兼容接口：覆盖写模式下仅返回当前Schema
   getSchemaVersions: (psuId) => {
     if (!isValidPsuId(psuId)) {
       return Promise.reject(new Error(`Invalid PSU ID: ${psuId}`));
     }
     return api.get(`/schemas/${psuId}/versions`);
+  }
+}
+
+export const paramSetApi = {
+  // 获取参数集（覆盖写）
+  getParamSet: (psuId) => {
+    if (!isValidPsuId(psuId)) {
+      return Promise.reject(new Error(`Invalid PSU ID: ${psuId}`));
+    }
+    return api.get(`/param-sets/${psuId}`);
+  },
+  // 覆盖写参数集
+  updateParamSet: (psuId, data) => {
+    if (!isValidPsuId(psuId)) {
+      return Promise.reject(new Error(`Invalid PSU ID: ${psuId}`));
+    }
+    return api.put(`/param-sets/${psuId}`, data);
   }
 }
 
@@ -140,6 +157,20 @@ export const versionReviewApi = {
   },
   // 审核版本
   reviewVersion: (reviewId, data) => api.post(`/versions/${reviewId}/review`, data),
+  // 版本对比
+  compareVersions: (psuId, fromVersionNo, toVersionNo) => {
+    if (!isValidPsuId(psuId)) {
+      return Promise.reject(new Error(`Invalid PSU ID: ${psuId}`));
+    }
+    return api.get(`/versions/${psuId}/compare`, { params: { fromVersionNo, toVersionNo } });
+  },
+  // 版本回滚
+  rollbackVersion: (psuId, data) => {
+    if (!isValidPsuId(psuId)) {
+      return Promise.reject(new Error(`Invalid PSU ID: ${psuId}`));
+    }
+    return api.post(`/versions/${psuId}/rollback`, data);
+  },
   // 获取生成的代码
   getCode: (psuId) => {
     if (!isValidPsuId(psuId)) {
@@ -147,6 +178,9 @@ export const versionReviewApi = {
     }
     return api.get(`/versions/${psuId}/code`);
   }
+  ,
+  // 审核预览：按参数集渲染当前待审编排
+  previewByParamSet: (reviewId) => api.get(`/versions/${reviewId}/preview`)
 }
 
 export const releaseApi = {

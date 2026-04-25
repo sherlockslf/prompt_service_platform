@@ -15,5 +15,6 @@ public class JsonSchemaResponse {
     private Long modifiedBy;
     private String modifierName;
     private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
     private String changeLog;
 }

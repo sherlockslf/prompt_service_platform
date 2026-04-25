@@ -2,7 +2,7 @@
   <div class="developer-dashboard">
     <el-container>
       <el-aside width="200px" class="sidebar">
-        <el-menu default-active="1" class="menu" @select="handleMenuSelect">
+        <el-menu :default-active="activeMenu" class="menu" @select="handleMenuSelect">
           <el-menu-item index="1">
             <span>PSU管理</span>
           </el-menu-item>
@@ -36,8 +36,8 @@
             <el-table-column prop="description" label="描述"></el-table-column>
             <el-table-column prop="status" label="状态" width="100">
               <template #default="{ row }">
-                <el-tag :type="row.status === 'ACTIVE' ? 'success' : 'danger'">
-                  {{ row.status === 'ACTIVE' ? '活跃' : '归档' }}
+                <el-tag :type="getPsuStatusTagType(row.status)">
+                  {{ getPsuStatusText(row.status) }}
                 </el-tag>
               </template>
             </el-table-column>
@@ -48,8 +48,8 @@
             </el-table-column>
             <el-table-column label="操作" width="200">
               <template #default="{ row }">
-                <el-button size="small" @click="editPsu(row)">编辑</el-button>
-                <el-button size="small" type="danger" @click="archivePsu(row)">归档</el-button>
+                <el-button size="small" @click="editPsu(row)" :disabled="row.status !== 'DRAFT'">编辑</el-button>
+                <el-button size="small" type="danger" @click="archivePsu(row)" :disabled="row.status === 'FORMAL'">归档</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -93,8 +93,25 @@
                 placeholder="请输入变更日志">
               </el-input>
             </el-form-item>
+            <el-form-item label="参数集内容">
+              <el-input
+                v-model="paramSetForm.paramSetContent"
+                type="textarea"
+                :rows="8"
+                placeholder="请输入参数集JSON（覆盖写）">
+              </el-input>
+            </el-form-item>
+            <el-form-item label="参数集日志">
+              <el-input
+                v-model="paramSetForm.changeLog"
+                type="textarea"
+                :rows="2"
+                placeholder="请输入参数集变更日志">
+              </el-input>
+            </el-form-item>
             <el-form-item>
               <el-button type="primary" @click="saveSchema">保存Schema</el-button>
+              <el-button type="primary" plain @click="saveParamSet">保存参数集</el-button>
               <el-button @click="loadSchema">加载最新版本</el-button>
             </el-form-item>
           </el-form>
@@ -187,10 +204,12 @@
             </el-table-column>
             <el-table-column prop="submitterId" label="提交者" width="120"></el-table-column>
             <el-table-column prop="submittedAt" label="提交时间" width="180"></el-table-column>
-            <el-table-column label="操作" width="200">
+            <el-table-column label="操作" width="320">
               <template #default="{ row }">
-                <el-button size="small" @click="approveVersion(row)" :disabled="row.status !== 'PENDING'">通过</el-button>
-                <el-button size="small" type="danger" @click="rejectVersion(row)" :disabled="row.status !== 'PENDING'">拒绝</el-button>
+                <el-button size="small" @click="approveVersion(row)" :disabled="row.status !== 'CANDIDATE'">通过</el-button>
+                <el-button size="small" type="danger" @click="rejectVersion(row)" :disabled="row.status !== 'CANDIDATE'">拒绝</el-button>
+                <el-button size="small" @click="compareVersion(row)">对比</el-button>
+                <el-button size="small" type="warning" @click="rollbackVersion(row)">回滚</el-button>
                 <el-button size="small" @click="viewCode(row)" v-if="row.codeContent">查看代码</el-button>
               </template>
             </el-table-column>
@@ -228,6 +247,11 @@
             <h3>生成的代码预览</h3>
             <pre>{{ generatedCode }}</pre>
           </div>
+        </div>
+
+        <!-- 发版中心 -->
+        <div v-if="activeMenu === '6'" class="content-section">
+          <ReleaseCenter />
         </div>
       </el-main>
     </el-container>
@@ -336,12 +360,13 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import api, { psuApi, schemaApi, testDatasetApi, versionReviewApi } from '@/services/api'
+import { ref, reactive, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import api, { psuApi, schemaApi, testDatasetApi, versionReviewApi, paramSetApi } from '@/services/api'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import ReleaseCenter from '@/views/developer/ReleaseCenter.vue'
 
-const router = useRouter()
+const route = useRoute()
 const activeMenu = ref('1')
 const showCreatePsuDialog = ref(false)
 const showEditPsuDialog = ref(false)
@@ -373,6 +398,10 @@ const editPsuForm = reactive({
 const selectedPsuId = ref('')
 const schemaForm = reactive({
   schemaContent: '',
+  changeLog: ''
+})
+const paramSetForm = reactive({
+  paramSetContent: '{}',
   changeLog: ''
 })
 
@@ -417,28 +446,118 @@ const psuRules = {
 
 // 菜单选择处理
 const handleMenuSelect = (index) => {
-  if (index === '3') {
-    // 统一将开发侧Prompt管理入口切换到动态容器编排页面
-    if (selectedPsuId.value) {
-      router.push(`/business/psus/${selectedPsuId.value}/composer`)
-      return
-    }
-    router.push('/business/composer')
-    return
-  }
-  if (index === '6') {
-    router.push('/developer/releases')
-    return
-  }
+  // 统一在当前页面切换模块，避免左侧导航栏因跨路由跳转发生变化
   activeMenu.value = index
 }
+
+// 根据路由参数初始化当前菜单，支持从其他页面直达指定模块
+const syncMenuFromRoute = () => {
+  const routeMenu = String(route.query.menu || '')
+  const allowedMenus = ['1', '2', '3', '4', '5', '6']
+  if (allowedMenus.includes(routeMenu)) {
+    activeMenu.value = routeMenu
+  }
+}
+
+const compareVersion = async (review) => {
+  try {
+    const { value } = await ElMessageBox.prompt('请输入对比起始版本号', '版本对比', {
+      confirmButtonText: '对比',
+      cancelButtonText: '取消',
+      inputPattern: /^\d+$/,
+      inputErrorMessage: '请输入正整数版本号'
+    })
+    const fromVersionNo = Number(value)
+    const res = await versionReviewApi.compareVersions(review.psuId, fromVersionNo, review.versionNo)
+    const data = res.data || {}
+    await ElMessageBox.alert(
+      `对比版本: v${data.fromVersionNo} -> v${data.toVersionNo}\n行数变化: ${data.fromLineCount} -> ${data.toLineCount}\n新增行: ${data.addedLineCount}\n删除行: ${data.removedLineCount}\n是否有变更: ${data.changed ? '是' : '否'}`,
+      '版本对比结果',
+      { confirmButtonText: '关闭' }
+    )
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.response?.data?.message || '版本对比失败')
+    }
+  }
+}
+
+const rollbackVersion = async (review) => {
+  try {
+    const { value } = await ElMessageBox.prompt('请输入回滚目标版本号', '版本回滚', {
+      confirmButtonText: '回滚',
+      cancelButtonText: '取消',
+      inputPattern: /^\d+$/,
+      inputErrorMessage: '请输入正整数版本号'
+    })
+    await versionReviewApi.rollbackVersion(review.psuId, {
+      targetVersionNo: Number(value),
+      reason: `manual-rollback-from-v${review.versionNo}`
+    })
+    ElMessage.success('版本回滚成功')
+    await loadVersionReviews()
+    await loadPsus()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.response?.data?.message || '版本回滚失败')
+    }
+  }
+}
+
+// 加载参数集（覆盖写）
+const loadParamSet = async () => {
+  if (!selectedPsuId.value) return
+  try {
+    const response = await paramSetApi.getParamSet(selectedPsuId.value)
+    paramSetForm.paramSetContent = formatJsonText(response.data?.paramSetContent || '{}')
+    paramSetForm.changeLog = response.data?.changeLog || ''
+  } catch (error) {
+    paramSetForm.paramSetContent = '{}'
+    paramSetForm.changeLog = ''
+  }
+}
+
+// 保存参数集（覆盖写）
+const saveParamSet = async () => {
+  if (!selectedPsuId.value) return
+  if (!isPsuDraft(selectedPsuId.value)) {
+    ElMessage.warning('仅草稿状态允许编辑参数集')
+    return
+  }
+  try {
+    const parsed = JSON.parse(paramSetForm.paramSetContent || '{}')
+    await paramSetApi.updateParamSet(selectedPsuId.value, {
+      paramSetContent: JSON.stringify(parsed),
+      changeLog: paramSetForm.changeLog
+    })
+    ElMessage.success('参数集保存成功')
+  } catch (error) {
+    console.error('保存参数集失败:', error)
+    ElMessage.error(error.response?.data?.message || '保存参数集失败，请检查JSON格式')
+  }
+}
+
+const formatJsonText = (data) => {
+  if (!data) return '{}'
+  try {
+    const parsed = typeof data === 'string' ? JSON.parse(data) : data
+    return JSON.stringify(parsed, null, 2)
+  } catch {
+    return String(data)
+  }
+}
+
+const getPsuById = (id) => psus.value.find(item => item.id === id)
+
+const isPsuDraft = (id) => getPsuById(id)?.status === 'DRAFT'
 
 // 获取状态标签类型
 const getStatusTagType = (status) => {
   switch (status) {
-    case 'PENDING': return 'warning'
-    case 'APPROVED': return 'success'
-    case 'REJECTED': return 'danger'
+    case 'CANDIDATE': return 'warning'
+    case 'FORMAL': return 'success'
+    case 'ARCHIVED': return 'info'
+    case 'DRAFT': return ''
     default: return 'info'
   }
 }
@@ -446,9 +565,30 @@ const getStatusTagType = (status) => {
 // 获取状态文本
 const getStatusText = (status) => {
   switch (status) {
-    case 'PENDING': return '待审核'
-    case 'APPROVED': return '已通过'
-    case 'REJECTED': return '已拒绝'
+    case 'DRAFT': return '草稿'
+    case 'CANDIDATE': return '候选'
+    case 'FORMAL': return '正式'
+    case 'ARCHIVED': return '归档'
+    default: return status
+  }
+}
+
+const getPsuStatusTagType = (status) => {
+  switch (status) {
+    case 'DRAFT': return ''
+    case 'CANDIDATE': return 'warning'
+    case 'FORMAL': return 'success'
+    case 'ARCHIVED': return 'info'
+    default: return 'info'
+  }
+}
+
+const getPsuStatusText = (status) => {
+  switch (status) {
+    case 'DRAFT': return '草稿'
+    case 'CANDIDATE': return '候选'
+    case 'FORMAL': return '正式'
+    case 'ARCHIVED': return '归档'
     default: return status
   }
 }
@@ -548,6 +688,10 @@ const formatDateTime = (dateTime) => {
 
 // 保存Schema
 const saveSchema = async () => {
+  if (!isPsuDraft(selectedPsuId.value)) {
+    ElMessage.warning('仅草稿状态允许编辑Schema')
+    return
+  }
   try {
     await api.put(`/schemas/${selectedPsuId.value}`, {
       schemaContent: schemaForm.schemaContent,
@@ -568,6 +712,7 @@ const loadSchema = async () => {
     const response = await schemaApi.getSchema(selectedPsuId.value)
     schemaForm.schemaContent = response.data.schemaContent
     schemaForm.changeLog = response.data.changeLog || ''
+    await loadParamSet()
     // 加载Schema后同时加载测试数据集
     loadTestDatasets()
   } catch (error) {
@@ -694,6 +839,10 @@ const editPromptFragment = (fragment) => {
 
 // 保存Prompt片段
 const savePromptFragment = async () => {
+  if (!isPsuDraft(selectedPromptPsuId.value)) {
+    ElMessage.warning('仅草稿状态允许编辑Prompt')
+    return
+  }
   try {
     await api.put(`/prompts/${editingPromptFragment.value.id}`, {
       content: editingPromptFragment.value.content
@@ -726,7 +875,8 @@ const rejectVersion = async (review) => {
   try {
     await versionReviewApi.reviewVersion(review.id, {
       approved: false,
-      rejectionReason: '不符合要求'
+      rejectionReason: '不符合要求',
+      rejectionType: 'BACK_TO_BIZ'
     })
     ElMessage.success('版本审核已拒绝')
     loadVersionReviews()
@@ -818,9 +968,17 @@ const handleVersionReviewPageChange = (page) => {
 }
 
 onMounted(() => {
+  syncMenuFromRoute()
   loadPsus()
   loadVersionReviews()
 })
+
+watch(
+  () => route.query.menu,
+  () => {
+    syncMenuFromRoute()
+  }
+)
 </script>
 
 <style scoped>

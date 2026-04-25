@@ -50,6 +50,7 @@
                     v-if="fragment.editable" 
                     size="small" 
                     @click="openEditDialog(fragment)"
+                    :disabled="selectedPsuStatus !== 'DRAFT'"
                   >
                     编辑
                   </el-button>
@@ -58,6 +59,7 @@
                     size="small" 
                     type="primary" 
                     @click="finalizePrompt(fragment)"
+                    :disabled="selectedPsuStatus !== 'DRAFT'"
                   >
                     定版
                   </el-button>
@@ -161,6 +163,7 @@ import PromptTextEditor from '@/components/composer/PromptTextEditor.vue'
 
 // 响应式数据
 const selectedPsuId = ref(null)
+const selectedPsuStatus = ref('')
 const psuList = ref([])
 const promptFragments = ref([])
 const schemaInfo = ref(null)
@@ -186,6 +189,7 @@ const loadPsuList = async () => {
 
 // PSU变化时加载对应的Prompt片段和Schema
 const onPsuChange = async () => {
+  selectedPsuStatus.value = (psuList.value.find(item => item.id === selectedPsuId.value)?.status) || ''
   if (selectedPsuId.value && isValidPsuId(selectedPsuId.value)) {
     await Promise.all([
       loadPromptFragments(),

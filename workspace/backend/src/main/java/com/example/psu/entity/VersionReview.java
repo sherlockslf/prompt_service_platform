@@ -47,7 +47,7 @@ public class VersionReview {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private ReviewStatus status = ReviewStatus.PENDING;
+    private ReviewStatus status = ReviewStatus.DRAFT;
 
     @Column(nullable = false)
     private Long submitterId;

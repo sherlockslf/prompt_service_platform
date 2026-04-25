@@ -1,6 +1,8 @@
 package com.example.psu.service;
 
 import com.example.psu.dto.request.ReviewRequest;
+import com.example.psu.dto.request.RollbackVersionRequest;
+import com.example.psu.dto.response.VersionCompareResponse;
 import com.example.psu.entity.VersionReview;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -20,4 +22,8 @@ public interface VersionReviewService {
     String getCode(Long psuId);
 
     VersionReview registerGitCommit(Long reviewId, String gitCommitHash, Long operatorId);
+
+    VersionCompareResponse compareVersions(Long psuId, Integer fromVersionNo, Integer toVersionNo);
+
+    VersionReview rollbackVersion(Long psuId, RollbackVersionRequest request, Long operatorId);
 }
