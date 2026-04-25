@@ -35,6 +35,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("null")
 class VersionReviewServiceImplTest {
 
     @Mock
@@ -199,3 +200,4 @@ class VersionReviewServiceImplTest {
         assertEquals(2, result.getTotalElements());
     }
 }
+

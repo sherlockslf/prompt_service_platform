@@ -13,6 +13,7 @@ import com.example.psu.enums.PsuStatus;
 import com.example.psu.enums.RejectionType;
 import com.example.psu.exception.BusinessException;
 import com.example.psu.exception.ErrorCode;
+import com.example.psu.exception.RequestValidationUtils;
 import com.example.psu.repository.JsonSchemaRepository;
 import com.example.psu.repository.PromptCompositionRepository;
 import com.example.psu.repository.PromptCompositionRevisionRepository;
@@ -31,6 +32,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -66,11 +68,13 @@ public class CompositionServiceImpl implements CompositionService {
 
     @Override
     public Optional<PromptComposition> getCompositionByPsuId(Long psuId) {
+        RequestValidationUtils.requireNonNull(psuId, "psuId");
         return compositionRepository.findByPsuId(psuId);
     }
 
     @Override
     public PromptComposition saveDraft(Long psuId, CompositionSaveRequest request, Long userId) {
+        RequestValidationUtils.requireNonNull(psuId, "psuId");
         assertDraftLifecycle(psuId);
         if (request == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "请求体不能为空");
@@ -104,6 +108,7 @@ public class CompositionServiceImpl implements CompositionService {
 
     @Override
     public CompositionValidateResponse validate(Long psuId, CompositionSaveRequest request) {
+        RequestValidationUtils.requireNonNull(psuId, "psuId");
         CompositionValidateResponse response = new CompositionValidateResponse();
 
         if (request == null) {
@@ -151,13 +156,16 @@ public class CompositionServiceImpl implements CompositionService {
 
     @Override
     public CompositionRenderResponse render(Long psuId, CompositionRenderRequest request) {
+        RequestValidationUtils.requireNonNull(psuId, "psuId");
         if (request == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "渲染请求不能为空");
         }
 
         PromptComposition composition;
-        if (request.getCompositionId() != null) {
-            composition = compositionRepository.findById(request.getCompositionId())
+        Long compositionId = request.getCompositionId();
+        if (compositionId != null) {
+            Long safeCompositionId = Objects.requireNonNull(compositionId);
+            composition = compositionRepository.findById(safeCompositionId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "编排不存在"));
             if (!composition.getPsuId().equals(psuId)) {
                 throw new BusinessException(ErrorCode.BAD_REQUEST, "编排不属于当前PSU");
@@ -198,6 +206,7 @@ public class CompositionServiceImpl implements CompositionService {
 
     @Override
     public PromptComposition submit(Long psuId, Long userId) {
+        RequestValidationUtils.requireNonNull(psuId, "psuId");
         assertDraftLifecycle(psuId);
         PromptComposition composition = compositionRepository.findByPsuId(psuId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "编排不存在"));
@@ -222,6 +231,8 @@ public class CompositionServiceImpl implements CompositionService {
 
     @Override
     public PromptComposition updateStatus(Long psuId, CompositionStatus status, String rejectionReason, RejectionType rejectionType) {
+        RequestValidationUtils.requireNonNull(psuId, "psuId");
+        RequestValidationUtils.requireNonNull(status, "status");
         PromptComposition composition = compositionRepository.findByPsuId(psuId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "编排不存在"));
 
@@ -234,6 +245,7 @@ public class CompositionServiceImpl implements CompositionService {
 
     @Override
     public PromptCompositionRevision createRevisionSnapshot(PromptComposition composition, Long operatorId) {
+        composition = RequestValidationUtils.requireNonNull(composition, "composition");
         int nextRevisionNo = revisionRepository.findTopByCompositionIdOrderByRevisionNoDesc(composition.getId())
             .map(rev -> rev.getRevisionNo() + 1)
             .orElse(1);
@@ -254,6 +266,7 @@ public class CompositionServiceImpl implements CompositionService {
 
     @Override
     public Optional<PromptCompositionRevision> getLatestRevision(Long compositionId) {
+        RequestValidationUtils.requireNonNull(compositionId, "compositionId");
         return revisionRepository.findTopByCompositionIdOrderByRevisionNoDesc(compositionId);
     }
 
@@ -265,7 +278,8 @@ public class CompositionServiceImpl implements CompositionService {
 
     private void assertDraftLifecycle(Long psuId) {
         // 生命周期约束：仅草稿允许编辑和提审编排
-        PsuUnit psu = psuRepository.findById(psuId)
+        Long safePsuId = Objects.requireNonNull(psuId);
+        PsuUnit psu = psuRepository.findById(safePsuId)
             .orElseThrow(() -> new BusinessException(ErrorCode.PSU_NOT_FOUND, "PSU不存在"));
         if (psu.getStatus() != PsuStatus.DRAFT) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "当前PSU为只读状态，仅草稿可编辑编排");
@@ -505,3 +519,5 @@ public class CompositionServiceImpl implements CompositionService {
         response.getWarnings().add(warning);
     }
 }
+
+

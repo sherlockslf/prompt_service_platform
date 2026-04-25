@@ -3,6 +3,7 @@ package com.example.psu.controller;
 import com.example.psu.dto.request.UpdateParamSetRequest;
 import com.example.psu.dto.response.ParamSetResponse;
 import com.example.psu.entity.ParamSet;
+import com.example.psu.exception.RequestValidationUtils;
 import com.example.psu.repository.UserRepository;
 import com.example.psu.service.ParamSetService;
 import jakarta.validation.Valid;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import java.util.Objects;
 
 /**
  * 参数集管理控制器
@@ -37,6 +39,7 @@ public class ParamSetController {
      */
     @GetMapping("/{psuId}")
     public ResponseEntity<ParamSetResponse> getParamSetByPsuId(@PathVariable Long psuId) {
+        RequestValidationUtils.requireNonNull(psuId, "psuId");
         ParamSet paramSet = paramSetService.getParamSetByPsuId(psuId);
         return ResponseEntity.ok(toResponse(paramSet));
     }
@@ -49,6 +52,8 @@ public class ParamSetController {
         @PathVariable Long psuId,
         @Valid @RequestBody UpdateParamSetRequest requestBody
     ) {
+        RequestValidationUtils.requireNonNull(psuId, "psuId");
+        requestBody = RequestValidationUtils.requireNonNull(requestBody, "requestBody");
         ParamSet paramSet = paramSetService.updateParamSet(
             psuId,
             requestBody.getParamSetContent(),
@@ -59,9 +64,14 @@ public class ParamSetController {
     }
 
     private ParamSetResponse toResponse(ParamSet paramSet) {
+        RequestValidationUtils.requireNonNull(paramSet, "paramSet");
+        ParamSet safeParamSet = Objects.requireNonNull(paramSet);
         ParamSetResponse response = new ParamSetResponse();
-        BeanUtils.copyProperties(paramSet, response);
-        userRepository.findById(paramSet.getModifiedBy()).ifPresent(modifier -> response.setModifierName(modifier.getUsername()));
+        BeanUtils.copyProperties(safeParamSet, response);
+        Long modifierId = safeParamSet.getModifiedBy() == null ? 0L : safeParamSet.getModifiedBy();
+        userRepository.findById(modifierId).ifPresent(modifier -> response.setModifierName(modifier.getUsername()));
         return response;
     }
 }
+
+

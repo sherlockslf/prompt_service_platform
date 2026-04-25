@@ -158,3 +158,4 @@ public class VersionReviewController {
         return ResponseEntity.ok(versionReviewService.registerGitCommit(reviewId, gitCommitHash, DEFAULT_OPERATOR_ID));
     }
 }
+

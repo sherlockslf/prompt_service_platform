@@ -17,10 +17,12 @@ import org.springframework.web.bind.annotation.RestController;
 import com.example.psu.dto.request.UpdateSchemaRequest;
 import com.example.psu.dto.response.JsonSchemaResponse;
 import com.example.psu.entity.JsonSchema;
+import com.example.psu.exception.RequestValidationUtils;
 import com.example.psu.repository.UserRepository;
 import com.example.psu.service.JsonSchemaService;
 
 import jakarta.validation.Valid;
+import java.util.Objects;
 
 /**
  * JSON Schema管理控制器
@@ -43,6 +45,7 @@ public class JsonSchemaController {
      */
     @GetMapping("/{psuId}")
     public ResponseEntity<JsonSchemaResponse> getSchemaByPsuId(@PathVariable Long psuId) {
+        RequestValidationUtils.requireNonNull(psuId, "psuId");
         JsonSchema schema = jsonSchemaService.getSchemaByPsuId(psuId, DEFAULT_OPERATOR_ID);
         JsonSchemaResponse response = convertToResponse(schema);
         return ResponseEntity.ok(response);
@@ -54,8 +57,10 @@ public class JsonSchemaController {
      */
     @PutMapping("/{psuId}")
     public ResponseEntity<JsonSchemaResponse> updateSchema(
-            @PathVariable Long psuId, 
+            @PathVariable Long psuId,
             @Valid @RequestBody UpdateSchemaRequest requestBody) {
+        RequestValidationUtils.requireNonNull(psuId, "psuId");
+        requestBody = RequestValidationUtils.requireNonNull(requestBody, "requestBody");
         JsonSchema schema = jsonSchemaService.updateSchema(psuId, requestBody.getSchemaContent(), DEFAULT_OPERATOR_ID, requestBody.getChangeLog());
         JsonSchemaResponse response = convertToResponse(schema);
         return ResponseEntity.ok(response);
@@ -67,6 +72,7 @@ public class JsonSchemaController {
      */
     @GetMapping("/{psuId}/versions")
     public ResponseEntity<List<JsonSchemaResponse>> getSchemaVersions(@PathVariable Long psuId) {
+        RequestValidationUtils.requireNonNull(psuId, "psuId");
         List<JsonSchema> versions = jsonSchemaService.getSchemaVersions(psuId);
         List<JsonSchemaResponse> responses = versions.stream()
                 .map(this::convertToResponse)
@@ -78,14 +84,19 @@ public class JsonSchemaController {
      * 将Schema实体转换为响应DTO
      */
     private JsonSchemaResponse convertToResponse(JsonSchema schema) {
+        RequestValidationUtils.requireNonNull(schema, "schema");
+        JsonSchema safeSchema = Objects.requireNonNull(schema);
         JsonSchemaResponse response = new JsonSchemaResponse();
-        BeanUtils.copyProperties(schema, response);
+        BeanUtils.copyProperties(safeSchema, response);
         
         // 获取修改者名称
-        userRepository.findById(schema.getModifiedBy()).ifPresent(modifier -> {
+        Long modifierId = safeSchema.getModifiedBy() == null ? 0L : safeSchema.getModifiedBy();
+        userRepository.findById(modifierId).ifPresent(modifier -> {
             response.setModifierName(modifier.getUsername());
         });
         
         return response;
     }
 }
+
+

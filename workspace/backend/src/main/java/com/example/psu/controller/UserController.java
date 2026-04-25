@@ -18,9 +18,11 @@ import com.example.psu.dto.UserCreateRequest;
 import com.example.psu.dto.response.UserResponse;
 import com.example.psu.entity.User;
 import com.example.psu.enums.UserRole;
+import com.example.psu.exception.RequestValidationUtils;
 import com.example.psu.service.UserService;
 
 import jakarta.validation.Valid;
+import java.util.Objects;
 
 /**
  * 用户管理控制器（仅管理员使用）
@@ -51,6 +53,7 @@ public class UserController {
      */
     @PostMapping
     public ResponseEntity<UserResponse> createUser(@Valid @RequestBody UserCreateRequest request) {
+        request = RequestValidationUtils.requireNonNull(request, "request");
         User user = new User();
         user.setUsername(request.getUsername());
         user.setPassword(request.getPassword());
@@ -68,6 +71,7 @@ public class UserController {
      */
     @PutMapping("/{id}/toggle-status")
     public ResponseEntity<UserResponse> toggleUserStatus(@PathVariable Long id) {
+        RequestValidationUtils.requireNonNull(id, "id");
         User user = userService.toggleUserStatus(id);
         UserResponse response = convertToResponse(user);
         return ResponseEntity.ok(response);
@@ -77,9 +81,13 @@ public class UserController {
      * 将用户实体转换为响应DTO
      */
     private UserResponse convertToResponse(User user) {
+        user = RequestValidationUtils.requireNonNull(user, "user");
+        User safeUser = Objects.requireNonNull(user);
         UserResponse response = new UserResponse();
-        BeanUtils.copyProperties(user, response);
-        response.setRole(user.getRole().getCode());
+        BeanUtils.copyProperties(safeUser, response);
+        response.setRole(safeUser.getRole().getCode());
         return response;
     }
 }
+
+

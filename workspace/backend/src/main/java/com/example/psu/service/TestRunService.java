@@ -8,6 +8,7 @@ import com.example.psu.entity.PromptComposition;
 import com.example.psu.entity.TestDataset;
 import com.example.psu.entity.TestRun;
 import com.example.psu.entity.TestRunItem;
+import com.example.psu.exception.RequestValidationUtils;
 import com.example.psu.repository.PromptCompositionRepository;
 import com.example.psu.repository.PsuRepository;
 import com.example.psu.repository.TestDatasetRepository;
@@ -23,6 +24,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * 测试运行服务
@@ -56,20 +58,24 @@ public class TestRunService {
      */
     @Transactional
     public TestRunResponse runDataset(Long psuId, Long datasetId, TestRunRequest request, Long userId) {
+        RequestValidationUtils.requireNonNull(psuId, "psuId");
+        RequestValidationUtils.requireNonNull(datasetId, "datasetId");
+        Long safePsuId = Objects.requireNonNull(psuId);
+        Long safeDatasetId = Objects.requireNonNull(datasetId);
         // 校验PSU和测试集，确保运行上下文正确。
-        psuRepository.findById(psuId).orElseThrow(() -> new RuntimeException("PSU not found: " + psuId));
-        TestDataset dataset = testDatasetRepository.findById(datasetId)
-            .orElseThrow(() -> new RuntimeException("Test dataset not found: " + datasetId));
-        if (!dataset.getPsuId().equals(psuId)) {
+        psuRepository.findById(safePsuId).orElseThrow(() -> new RuntimeException("PSU not found: " + safePsuId));
+        TestDataset dataset = testDatasetRepository.findById(safeDatasetId)
+            .orElseThrow(() -> new RuntimeException("Test dataset not found: " + safeDatasetId));
+        if (!dataset.getPsuId().equals(safePsuId)) {
             throw new RuntimeException("测试集不属于当前PSU");
         }
 
-        PromptComposition composition = resolveComposition(psuId, request == null ? null : request.getCompositionId());
+        PromptComposition composition = resolveComposition(safePsuId, request == null ? null : request.getCompositionId());
         List<Map<String, Object>> cases = parseDatasetCases(dataset.getDataContent());
 
         TestRun run = new TestRun();
-        run.setPsuId(psuId);
-        run.setDatasetId(datasetId);
+        run.setPsuId(safePsuId);
+        run.setDatasetId(safeDatasetId);
         run.setCompositionId(composition.getId());
         run.setCreatedBy(userId);
         run = testRunRepository.save(run);
@@ -88,7 +94,7 @@ public class TestRunService {
             renderRequest.setCompositionId(composition.getId());
             renderRequest.setInput(input);
             long begin = System.currentTimeMillis();
-            CompositionRenderResponse renderResponse = compositionService.render(psuId, renderRequest);
+            CompositionRenderResponse renderResponse = compositionService.render(safePsuId, renderRequest);
             int latency = (int) (System.currentTimeMillis() - begin);
 
             boolean itemSuccess = renderResponse.getMissingVars() == null || renderResponse.getMissingVars().isEmpty();
@@ -145,10 +151,12 @@ public class TestRunService {
      * 获取测试运行详情
      */
     public TestRunResponse getRun(Long runId) {
+        RequestValidationUtils.requireNonNull(runId, "runId");
+        Long safeRunId = Objects.requireNonNull(runId);
         // 读取主记录与明细并拼装统一响应结构。
-        TestRun run = testRunRepository.findById(runId)
-            .orElseThrow(() -> new RuntimeException("Test run not found: " + runId));
-        List<TestRunItem> runItems = testRunItemRepository.findByRunIdOrderByIdAsc(runId);
+        TestRun run = testRunRepository.findById(safeRunId)
+            .orElseThrow(() -> new RuntimeException("Test run not found: " + safeRunId));
+        List<TestRunItem> runItems = testRunItemRepository.findByRunIdOrderByIdAsc(safeRunId);
 
         TestRunResponse response = new TestRunResponse();
         response.setRunId(run.getId());
@@ -253,3 +261,5 @@ public class TestRunService {
         }
     }
 }
+
+

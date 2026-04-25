@@ -22,8 +22,6 @@ public interface VersionReviewRepository extends JpaRepository<VersionReview, Lo
 
     Page<VersionReview> findByPsuId(Long psuId, Pageable pageable);
 
-    Page<VersionReview> findAll(Pageable pageable);
-
     Optional<VersionReview> findTopByPsuIdAndStatusOrderByReviewedAtDesc(Long psuId, ReviewStatus status);
 
     boolean existsByCompositionIdAndCompositionRevisionNoAndStatus(

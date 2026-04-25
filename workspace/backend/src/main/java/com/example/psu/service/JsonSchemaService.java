@@ -2,6 +2,7 @@ package com.example.psu.service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -9,6 +10,7 @@ import org.springframework.stereotype.Service;
 import com.example.psu.entity.JsonSchema;
 import com.example.psu.entity.PsuUnit;
 import com.example.psu.enums.PsuStatus;
+import com.example.psu.exception.RequestValidationUtils;
 import com.example.psu.repository.JsonSchemaRepository;
 import com.example.psu.repository.PsuRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -35,12 +37,14 @@ public class JsonSchemaService {
      * @return Schema实体
      */
     public JsonSchema getSchemaByPsuId(Long psuId, Long userId) {
+        RequestValidationUtils.requireNonNull(psuId, "psuId");
+        Long safePsuId = Objects.requireNonNull(psuId);
         // 检查PSU是否存在
-        psuRepository.findById(psuId)
-                .orElseThrow(() -> new RuntimeException("PSU not found: " + psuId));
+        psuRepository.findById(safePsuId)
+                .orElseThrow(() -> new RuntimeException("PSU not found: " + safePsuId));
 
-        return jsonSchemaRepository.findByPsuId(psuId)
-                .orElseThrow(() -> new RuntimeException("Schema not found for PSU: " + psuId));
+        return jsonSchemaRepository.findByPsuId(safePsuId)
+                .orElseThrow(() -> new RuntimeException("Schema not found for PSU: " + safePsuId));
     }
     
     /**
@@ -52,9 +56,12 @@ public class JsonSchemaService {
      * @return 更新后的Schema
      */
     public JsonSchema updateSchema(Long psuId, String schemaContent, Long userId, String changeLog) {
+        RequestValidationUtils.requireNonNull(psuId, "psuId");
+        RequestValidationUtils.requireNonBlank(schemaContent, "schemaContent");
+        Long safePsuId = Objects.requireNonNull(psuId);
         // 检查PSU是否存在
-        PsuUnit psu = psuRepository.findById(psuId)
-                .orElseThrow(() -> new RuntimeException("PSU not found: " + psuId));
+        PsuUnit psu = psuRepository.findById(safePsuId)
+                .orElseThrow(() -> new RuntimeException("PSU not found: " + safePsuId));
         if (psu.getStatus() != PsuStatus.DRAFT) {
             throw new RuntimeException("当前PSU为只读状态，仅草稿可编辑Schema");
         }
@@ -67,9 +74,9 @@ public class JsonSchemaService {
         }
         
         // 覆盖写语义：同一PSU只保留一条Schema记录
-        JsonSchema schema = jsonSchemaRepository.findByPsuId(psuId).orElseGet(() -> {
+        JsonSchema schema = jsonSchemaRepository.findByPsuId(safePsuId).orElseGet(() -> {
             JsonSchema created = new JsonSchema();
-            created.setPsuId(psuId);
+            created.setPsuId(safePsuId);
             created.setCreatedAt(LocalDateTime.now());
             return created;
         });
@@ -93,9 +100,12 @@ public class JsonSchemaService {
      * @return Schema版本列表
      */
     public List<JsonSchema> getSchemaVersions(Long psuId) {
+        RequestValidationUtils.requireNonNull(psuId, "psuId");
         // 兼容旧接口：覆盖写模式下仅返回当前一条
         return jsonSchemaRepository.findByPsuId(psuId)
                 .map(List::of)
                 .orElse(List.of());
     }
 }
+
+

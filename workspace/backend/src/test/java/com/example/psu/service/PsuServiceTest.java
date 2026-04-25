@@ -18,7 +18,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
@@ -34,6 +33,7 @@ import static org.mockito.Mockito.*;
  * PsuService单元测试
  */
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("null")
 class PsuServiceTest {
 
     @Mock
@@ -223,3 +223,4 @@ class PsuServiceTest {
         verify(psuRepository, never()).save(any(PsuUnit.class));
     }
 }
+

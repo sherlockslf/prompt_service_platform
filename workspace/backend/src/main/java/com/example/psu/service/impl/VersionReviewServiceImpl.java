@@ -9,10 +9,10 @@ import com.example.psu.entity.PsuUnit;
 import com.example.psu.entity.VersionReview;
 import com.example.psu.enums.CompositionStatus;
 import com.example.psu.enums.PsuStatus;
-import com.example.psu.enums.RejectionType;
 import com.example.psu.enums.ReviewStatus;
 import com.example.psu.exception.BusinessException;
 import com.example.psu.exception.ErrorCode;
+import com.example.psu.exception.RequestValidationUtils;
 import com.example.psu.repository.PromptCompositionRepository;
 import com.example.psu.repository.PromptCompositionRevisionRepository;
 import com.example.psu.repository.PsuRepository;
@@ -28,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -63,37 +64,46 @@ public class VersionReviewServiceImpl implements VersionReviewService {
 
     @Override
     public Page<VersionReview> getVersionReviews(Long psuId, Pageable pageable) {
+        RequestValidationUtils.requireNonNull(pageable, "pageable");
+        Pageable safePageable = Objects.requireNonNull(pageable);
         if (psuId == null) {
-            return versionReviewRepository.findAll(pageable);
+            return versionReviewRepository.findAll(safePageable);
         }
-        return versionReviewRepository.findByPsuId(psuId, pageable);
+        Long safePsuId = Objects.requireNonNull(psuId);
+        return versionReviewRepository.findByPsuId(safePsuId, safePageable);
     }
 
     @Override
     public Optional<VersionReview> getVersionReviewById(Long id) {
-        return versionReviewRepository.findById(id);
+        RequestValidationUtils.requireNonNull(id, "id");
+        Long safeId = Objects.requireNonNull(id);
+        return versionReviewRepository.findById(safeId);
     }
 
     @Override
     public VersionReview submitVersion(Long psuId, Long submitterId) {
-        PsuUnit psu = psuRepository.findById(psuId)
-            .orElseThrow(() -> new BusinessException(ErrorCode.PSU_NOT_FOUND, "PSU不存在: " + psuId));
+        RequestValidationUtils.requireNonNull(psuId, "psuId");
+        RequestValidationUtils.requireNonNull(submitterId, "submitterId");
+        Long safePsuId = Objects.requireNonNull(psuId);
+        Long safeSubmitterId = Objects.requireNonNull(submitterId);
+        PsuUnit psu = psuRepository.findById(safePsuId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.PSU_NOT_FOUND, "PSU不存在: " + safePsuId));
         if (psu.getStatus() != PsuStatus.DRAFT) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "仅草稿状态允许提交审核");
         }
 
-        PromptComposition composition = compositionService.getCompositionByPsuId(psuId)
+        PromptComposition composition = compositionService.getCompositionByPsuId(safePsuId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "编排不存在"));
 
         if (composition.getStatus() == CompositionStatus.DRAFT) {
-            composition = compositionService.submit(psuId, submitterId);
+            composition = compositionService.submit(safePsuId, safeSubmitterId);
         } else if (composition.getStatus() != CompositionStatus.CANDIDATE) {
             throw new BusinessException(ErrorCode.VERSION_ALREADY_SUBMITTED, "当前编排状态不允许提交审核: " + composition.getStatus());
         }
 
         PromptCompositionRevision revision = compositionService.getLatestRevision(composition.getId()).orElse(null);
         if (revision == null) {
-            revision = compositionService.createRevisionSnapshot(composition, submitterId);
+            revision = compositionService.createRevisionSnapshot(composition, safeSubmitterId);
         }
 
         boolean existsPending = versionReviewRepository.existsByCompositionIdAndCompositionRevisionNoAndStatus(
@@ -106,8 +116,8 @@ public class VersionReviewServiceImpl implements VersionReviewService {
         }
 
         VersionReview review = new VersionReview();
-        review.setPsuId(psuId);
-        review.setSubmitterId(submitterId);
+        review.setPsuId(safePsuId);
+        review.setSubmitterId(safeSubmitterId);
         review.setStatus(ReviewStatus.CANDIDATE);
         review.setVersionNo(psu.getVersionNo());
         review.setCompositionId(composition.getId());
@@ -121,18 +131,22 @@ public class VersionReviewServiceImpl implements VersionReviewService {
 
     @Override
     public VersionReview reviewVersion(Long reviewId, ReviewRequest request, Long reviewerId) {
+        RequestValidationUtils.requireNonNull(reviewId, "reviewId");
+        RequestValidationUtils.requireNonNull(reviewerId, "reviewerId");
+        Long safeReviewId = Objects.requireNonNull(reviewId);
+        Long safeReviewerId = Objects.requireNonNull(reviewerId);
         if (request == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "审核请求不能为空");
         }
 
-        VersionReview review = versionReviewRepository.findById(reviewId)
+        VersionReview review = versionReviewRepository.findById(safeReviewId)
             .orElseThrow(() -> new BusinessException(ErrorCode.VERSION_NOT_FOUND, "审核记录不存在"));
 
         if (review.getStatus() != ReviewStatus.CANDIDATE) {
             throw new BusinessException(ErrorCode.VERSION_ALREADY_REVIEWED, "该审核记录已处理");
         }
 
-        review.setReviewerId(reviewerId);
+        review.setReviewerId(safeReviewerId);
         review.setReviewedAt(LocalDateTime.now());
 
         if (request.isApproved()) {
@@ -143,7 +157,8 @@ public class VersionReviewServiceImpl implements VersionReviewService {
                 review.setCodeContent(codeGeneratorService.generateCompleteBusinessCode(review.getPsuId()));
             }
             compositionService.updateStatus(review.getPsuId(), CompositionStatus.FORMAL, null, null);
-            PsuUnit psu = psuRepository.findById(review.getPsuId())
+            Long reviewPsuId = Objects.requireNonNull(review.getPsuId());
+            PsuUnit psu = psuRepository.findById(reviewPsuId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PSU_NOT_FOUND, "PSU不存在"));
             psu.setStatus(PsuStatus.FORMAL);
             psuRepository.save(psu);
@@ -166,8 +181,9 @@ public class VersionReviewServiceImpl implements VersionReviewService {
                 request.getRejectionReason(),
                 request.getRejectionType()
             );
-            compositionService.createRevisionSnapshot(draft, reviewerId);
-            PsuUnit psu = psuRepository.findById(review.getPsuId())
+            compositionService.createRevisionSnapshot(draft, safeReviewerId);
+            Long reviewPsuId = Objects.requireNonNull(review.getPsuId());
+            PsuUnit psu = psuRepository.findById(reviewPsuId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PSU_NOT_FOUND, "PSU不存在"));
             psu.setStatus(PsuStatus.DRAFT);
             psuRepository.save(psu);
@@ -178,6 +194,7 @@ public class VersionReviewServiceImpl implements VersionReviewService {
 
     @Override
     public String getCode(Long psuId) {
+        RequestValidationUtils.requireNonNull(psuId, "psuId");
         VersionReview approved = versionReviewRepository.findTopByPsuIdAndStatusOrderByReviewedAtDesc(psuId, ReviewStatus.FORMAL)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "未找到已通过审核的版本"));
 
@@ -191,11 +208,15 @@ public class VersionReviewServiceImpl implements VersionReviewService {
 
     @Override
     public VersionReview registerGitCommit(Long reviewId, String gitCommitHash, Long operatorId) {
+        RequestValidationUtils.requireNonNull(reviewId, "reviewId");
+        RequestValidationUtils.requireNonNull(operatorId, "operatorId");
+        Long safeReviewId = Objects.requireNonNull(reviewId);
+        Long safeOperatorId = Objects.requireNonNull(operatorId);
         if (gitCommitHash == null || gitCommitHash.isBlank()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "gitCommitHash不能为空");
         }
 
-        VersionReview review = versionReviewRepository.findById(reviewId)
+        VersionReview review = versionReviewRepository.findById(safeReviewId)
             .orElseThrow(() -> new BusinessException(ErrorCode.VERSION_NOT_FOUND, "审核记录不存在"));
 
         if (review.getStatus() != ReviewStatus.FORMAL) {
@@ -203,13 +224,16 @@ public class VersionReviewServiceImpl implements VersionReviewService {
         }
 
         review.setGitCommitHash(gitCommitHash.trim());
-        review.setReviewerId(operatorId);
+        review.setReviewerId(safeOperatorId);
         review.setReviewedAt(LocalDateTime.now());
         return versionReviewRepository.save(review);
     }
 
     @Override
     public VersionCompareResponse compareVersions(Long psuId, Integer fromVersionNo, Integer toVersionNo) {
+        RequestValidationUtils.requireNonNull(psuId, "psuId");
+        RequestValidationUtils.requireNonNull(fromVersionNo, "fromVersionNo");
+        RequestValidationUtils.requireNonNull(toVersionNo, "toVersionNo");
         VersionReview from = versionReviewRepository.findByPsuIdAndVersionNo(psuId, fromVersionNo)
             .orElseThrow(() -> new BusinessException(ErrorCode.VERSION_NOT_FOUND, "起始版本不存在"));
         VersionReview to = versionReviewRepository.findByPsuIdAndVersionNo(psuId, toVersionNo)
@@ -229,16 +253,20 @@ public class VersionReviewServiceImpl implements VersionReviewService {
 
     @Override
     public VersionReview rollbackVersion(Long psuId, RollbackVersionRequest request, Long operatorId) {
+        RequestValidationUtils.requireNonNull(psuId, "psuId");
+        RequestValidationUtils.requireNonNull(operatorId, "operatorId");
+        Long safePsuId = Objects.requireNonNull(psuId);
+        Long safeOperatorId = Objects.requireNonNull(operatorId);
         if (request == null || request.getTargetVersionNo() == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "targetVersionNo不能为空");
         }
-        PsuUnit psu = psuRepository.findById(psuId)
+        PsuUnit psu = psuRepository.findById(safePsuId)
             .orElseThrow(() -> new BusinessException(ErrorCode.PSU_NOT_FOUND, "PSU不存在"));
         if (psu.getStatus() != PsuStatus.FORMAL) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "仅正式版支持版本回滚");
         }
 
-        VersionReview target = versionReviewRepository.findByPsuIdAndVersionNo(psuId, request.getTargetVersionNo())
+        VersionReview target = versionReviewRepository.findByPsuIdAndVersionNo(safePsuId, request.getTargetVersionNo())
             .orElseThrow(() -> new BusinessException(ErrorCode.VERSION_NOT_FOUND, "回滚目标版本不存在"));
         if (target.getStatus() != ReviewStatus.FORMAL && target.getStatus() != ReviewStatus.ARCHIVED) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "仅允许回滚到历史正式版");
@@ -246,24 +274,24 @@ public class VersionReviewServiceImpl implements VersionReviewService {
         PromptCompositionRevision snapshot = promptCompositionRevisionRepository
             .findByCompositionIdAndRevisionNo(target.getCompositionId(), target.getCompositionRevisionNo())
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "目标版本快照不存在"));
-        PromptComposition composition = promptCompositionRepository.findByPsuId(psuId)
+        PromptComposition composition = promptCompositionRepository.findByPsuId(safePsuId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "编排不存在"));
 
         // 回滚时用目标快照覆盖当前编排，并记录新快照
         composition.setContent(snapshot.getContentSnapshot());
         composition.setSpecJson(snapshot.getSpecJsonSnapshot());
         composition.setStatus(CompositionStatus.FORMAL);
-        composition.setUpdatedBy(operatorId == null ? 0L : operatorId);
+        composition.setUpdatedBy(safeOperatorId);
         PromptComposition saved = promptCompositionRepository.save(composition);
-        PromptCompositionRevision rollbackSnapshot = compositionService.createRevisionSnapshot(saved, operatorId);
+        PromptCompositionRevision rollbackSnapshot = compositionService.createRevisionSnapshot(saved, safeOperatorId);
 
         int rollbackVersionNo = (psu.getVersionNo() == null ? 0 : psu.getVersionNo()) + 1;
         VersionReview rollbackReview = new VersionReview();
-        rollbackReview.setPsuId(psuId);
+        rollbackReview.setPsuId(safePsuId);
         rollbackReview.setVersionNo(rollbackVersionNo);
         rollbackReview.setStatus(ReviewStatus.FORMAL);
-        rollbackReview.setSubmitterId(operatorId == null ? 0L : operatorId);
-        rollbackReview.setReviewerId(operatorId == null ? 0L : operatorId);
+        rollbackReview.setSubmitterId(safeOperatorId);
+        rollbackReview.setReviewerId(safeOperatorId);
         rollbackReview.setSubmittedAt(LocalDateTime.now());
         rollbackReview.setReviewedAt(LocalDateTime.now());
         rollbackReview.setCompositionId(saved.getId());
@@ -326,6 +354,8 @@ public class VersionReviewServiceImpl implements VersionReviewService {
         response.setToLineCount(toLines.length);
         response.setAddedLineCount(added);
         response.setRemovedLineCount(removed);
-        response.setChanged(!fromPrompt.equals(toPrompt));
+        response.setChanged(!Objects.equals(fromPrompt, toPrompt));
     }
 }
+
+

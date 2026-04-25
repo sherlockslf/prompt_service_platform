@@ -17,6 +17,7 @@ import com.example.psu.enums.ReleaseStatus;
 import com.example.psu.enums.ReleaseType;
 import com.example.psu.enums.ReviewStatus;
 import com.example.psu.enums.RuleOperator;
+import com.example.psu.exception.RequestValidationUtils;
 import com.example.psu.repository.PromptCompositionRevisionRepository;
 import com.example.psu.repository.PromptLiveVersionRepository;
 import com.example.psu.repository.PromptReleaseRepository;
@@ -32,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -68,24 +70,31 @@ public class ReleaseService {
     }
 
     public Page<PromptRelease> getReleases(Long psuId, String environment, Pageable pageable) {
+        RequestValidationUtils.requireNonNull(pageable, "pageable");
+        Pageable safePageable = Objects.requireNonNull(pageable);
         if (psuId == null) {
-            return promptReleaseRepository.findAll(pageable);
+            return promptReleaseRepository.findAll(safePageable);
         }
+        Long safePsuId = Objects.requireNonNull(psuId);
         if (environment != null && !environment.isBlank()) {
-            return promptReleaseRepository.findByPsuIdAndEnvironment(psuId, environment, pageable);
+            return promptReleaseRepository.findByPsuIdAndEnvironment(safePsuId, environment, safePageable);
         }
-        return promptReleaseRepository.findByPsuId(psuId, pageable);
+        return promptReleaseRepository.findByPsuId(safePsuId, safePageable);
     }
 
     public PromptRelease getRelease(Long releaseId) {
-        return promptReleaseRepository.findById(releaseId)
-            .orElseThrow(() -> new IllegalArgumentException("发布单不存在: " + releaseId));
+        RequestValidationUtils.requireNonNull(releaseId, "releaseId");
+        Long safeReleaseId = Objects.requireNonNull(releaseId);
+        return promptReleaseRepository.findById(safeReleaseId)
+            .orElseThrow(() -> new IllegalArgumentException("发布单不存在: " + safeReleaseId));
     }
 
     public PromptRelease createRelease(CreateReleaseRequest request, Long operatorId) {
+        RequestValidationUtils.requireNonNull(request, "request");
         validateCreateRequest(request);
-        PsuUnit psu = psuRepository.findById(request.getPsuId())
-            .orElseThrow(() -> new IllegalArgumentException("PSU不存在: " + request.getPsuId()));
+        Long safePsuId = Objects.requireNonNull(request.getPsuId());
+        PsuUnit psu = psuRepository.findById(safePsuId)
+            .orElseThrow(() -> new IllegalArgumentException("PSU不存在: " + safePsuId));
         if (psu.getStatus() != PsuStatus.FORMAL) {
             throw new IllegalArgumentException("仅正式版本PSU允许创建发布单");
         }
@@ -93,7 +102,7 @@ public class ReleaseService {
             .findByCompositionIdAndRevisionNo(request.getTargetCompositionId(), request.getTargetRevisionNo())
             .orElseThrow(() -> new IllegalArgumentException("目标快照不存在"));
         boolean approvedTarget = versionReviewRepository.existsByPsuIdAndCompositionIdAndCompositionRevisionNoAndStatus(
-            request.getPsuId(),
+            safePsuId,
             request.getTargetCompositionId(),
             request.getTargetRevisionNo(),
             ReviewStatus.FORMAL
@@ -103,7 +112,7 @@ public class ReleaseService {
         }
 
         PromptRelease release = new PromptRelease();
-        release.setPsuId(request.getPsuId());
+        release.setPsuId(safePsuId);
         release.setEnvironment(request.getEnvironment().trim().toUpperCase());
         release.setReleaseType(request.getReleaseType());
         release.setTargetCompositionId(request.getTargetCompositionId());
@@ -116,6 +125,7 @@ public class ReleaseService {
     }
 
     public PromptRelease submit(Long releaseId, Long operatorId) {
+        RequestValidationUtils.requireNonNull(releaseId, "releaseId");
         PromptRelease release = getRelease(releaseId);
         if (release.getStatus() != ReleaseStatus.DRAFT) {
             throw new IllegalArgumentException("仅DRAFT状态可提交审核");
@@ -126,6 +136,7 @@ public class ReleaseService {
     }
 
     public PromptRelease approve(Long releaseId, Long operatorId) {
+        RequestValidationUtils.requireNonNull(releaseId, "releaseId");
         PromptRelease release = getRelease(releaseId);
         if (release.getStatus() != ReleaseStatus.PENDING_APPROVAL) {
             throw new IllegalArgumentException("仅待审核状态可通过");
@@ -138,6 +149,7 @@ public class ReleaseService {
     }
 
     public PromptRelease reject(Long releaseId, ReviewReleaseRequest request, Long operatorId) {
+        RequestValidationUtils.requireNonNull(releaseId, "releaseId");
         PromptRelease release = getRelease(releaseId);
         if (release.getStatus() != ReleaseStatus.PENDING_APPROVAL) {
             throw new IllegalArgumentException("仅待审核状态可驳回");
@@ -149,6 +161,7 @@ public class ReleaseService {
     }
 
     public PromptRelease execute(Long releaseId, Long operatorId) {
+        RequestValidationUtils.requireNonNull(releaseId, "releaseId");
         PromptRelease release = getRelease(releaseId);
         if (release.getStatus() != ReleaseStatus.APPROVED) {
             throw new IllegalArgumentException("仅审核通过状态可执行发布");
@@ -190,12 +203,14 @@ public class ReleaseService {
     }
 
     public PromptRelease rollback(Long releaseId, RollbackReleaseRequest request, Long operatorId) {
+        RequestValidationUtils.requireNonNull(releaseId, "releaseId");
         PromptRelease release = getRelease(releaseId);
         // 仅成功发布后的单据允许回滚，避免草稿/审核态误操作。
         if (release.getStatus() != ReleaseStatus.SUCCESS) {
             throw new IllegalArgumentException("仅SUCCESS状态发布单允许回滚");
         }
         Integer targetRevisionNo = request == null ? null : request.getTargetRevisionNo();
+        String rollbackReason = request == null ? null : request.getReason();
         if (targetRevisionNo == null) {
             throw new IllegalArgumentException("回滚目标版本号不能为空");
         }
@@ -216,14 +231,14 @@ public class ReleaseService {
 
         live.setStableReleaseId(toReleaseId);
         live.setStableRevisionNo(targetRevisionNo);
-        if (live.getCanaryReleaseId() != null && live.getCanaryReleaseId().equals(releaseId)) {
+        if (Objects.equals(live.getCanaryReleaseId(), releaseId)) {
             live.setCanaryReleaseId(null);
         }
         live.setUpdatedBy(operatorId);
         promptLiveVersionRepository.save(live);
 
         release.setRollbackToRevisionNo(targetRevisionNo);
-        release.setRollbackReason(request.getReason());
+        release.setRollbackReason(rollbackReason);
         release.setStatus(ReleaseStatus.ROLLED_BACK);
         release.setUpdatedBy(operatorId);
         promptReleaseRepository.save(release);
@@ -235,18 +250,21 @@ public class ReleaseService {
         record.setFromRevisionNo(fromRevision == null ? targetRevisionNo : fromRevision);
         record.setToReleaseId(toReleaseId);
         record.setToRevisionNo(targetRevisionNo);
-        record.setReason(request.getReason());
+        record.setReason(rollbackReason);
         record.setOperatorId(operatorId);
         promptRollbackRecordRepository.save(record);
         return release;
     }
 
     public List<PromptReleaseRule> getRules(Long releaseId) {
+        RequestValidationUtils.requireNonNull(releaseId, "releaseId");
         getRelease(releaseId);
         return promptReleaseRuleRepository.findByReleaseIdOrderByPriorityAsc(releaseId);
     }
 
     public PromptReleaseRule addRule(Long releaseId, ReleaseRuleRequest request) {
+        RequestValidationUtils.requireNonNull(releaseId, "releaseId");
+        RequestValidationUtils.requireNonNull(request, "request");
         getRelease(releaseId);
         validateRuleRequest(request);
         PromptReleaseRule rule = new PromptReleaseRule();
@@ -256,10 +274,14 @@ public class ReleaseService {
     }
 
     public PromptReleaseRule updateRule(Long releaseId, Long ruleId, ReleaseRuleRequest request) {
+        RequestValidationUtils.requireNonNull(releaseId, "releaseId");
+        RequestValidationUtils.requireNonNull(ruleId, "ruleId");
+        RequestValidationUtils.requireNonNull(request, "request");
         getRelease(releaseId);
         validateRuleRequest(request);
-        PromptReleaseRule rule = promptReleaseRuleRepository.findById(ruleId)
-            .orElseThrow(() -> new IllegalArgumentException("规则不存在: " + ruleId));
+        Long safeRuleId = Objects.requireNonNull(ruleId);
+        PromptReleaseRule rule = promptReleaseRuleRepository.findById(safeRuleId)
+            .orElseThrow(() -> new IllegalArgumentException("规则不存在: " + safeRuleId));
         if (!rule.getReleaseId().equals(releaseId)) {
             throw new IllegalArgumentException("规则不属于当前发布单");
         }
@@ -268,9 +290,12 @@ public class ReleaseService {
     }
 
     public void deleteRule(Long releaseId, Long ruleId) {
+        RequestValidationUtils.requireNonNull(releaseId, "releaseId");
+        RequestValidationUtils.requireNonNull(ruleId, "ruleId");
         getRelease(releaseId);
-        PromptReleaseRule rule = promptReleaseRuleRepository.findById(ruleId)
-            .orElseThrow(() -> new IllegalArgumentException("规则不存在: " + ruleId));
+        Long safeRuleId = Objects.requireNonNull(ruleId);
+        PromptReleaseRule rule = promptReleaseRuleRepository.findById(safeRuleId)
+            .orElseThrow(() -> new IllegalArgumentException("规则不存在: " + safeRuleId));
         if (!rule.getReleaseId().equals(releaseId)) {
             throw new IllegalArgumentException("规则不属于当前发布单");
         }
@@ -281,18 +306,20 @@ public class ReleaseService {
         if (request == null || request.getPsuId() == null || request.getEnvironment() == null) {
             throw new IllegalArgumentException("psuId/environment不能为空");
         }
-        PsuUnit psu = psuRepository.findById(request.getPsuId())
+        Long safePsuId = Objects.requireNonNull(request.getPsuId());
+        String safeEnvironment = request.getEnvironment().trim().toUpperCase();
+        PsuUnit psu = psuRepository.findById(safePsuId)
             .orElseThrow(() -> new IllegalArgumentException("PSU不存在"));
         if (psu.getStatus() != PsuStatus.FORMAL) {
             throw new IllegalArgumentException("仅正式版本PSU可对外提供服务");
         }
         PromptLiveVersion live = promptLiveVersionRepository
-            .findByPsuIdAndEnvironment(request.getPsuId(), request.getEnvironment().trim().toUpperCase())
+            .findByPsuIdAndEnvironment(safePsuId, safeEnvironment)
             .orElseThrow(() -> new IllegalArgumentException("未找到生效版本"));
 
         ResolvePromptResponse response = new ResolvePromptResponse();
-        response.setPsuId(request.getPsuId());
-        response.setEnvironment(request.getEnvironment().trim().toUpperCase());
+        response.setPsuId(safePsuId);
+        response.setEnvironment(safeEnvironment);
         response.getRenderConfig().put("placeholderStyle", "mustache");
 
         Long canaryReleaseId = live.getCanaryReleaseId();
@@ -414,3 +441,5 @@ public class ReleaseService {
         return false;
     }
 }
+
+

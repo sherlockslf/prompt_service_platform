@@ -2,12 +2,14 @@ package com.example.psu.service;
 
 import com.example.psu.entity.SystemConfig;
 import com.example.psu.enums.ConfigType;
+import com.example.psu.exception.RequestValidationUtils;
 import com.example.psu.repository.SystemConfigRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * 系统配置服务
@@ -35,6 +37,7 @@ public class SystemConfigService {
      * @return 系统配置
      */
     public SystemConfig getConfigByKey(String configKey) {
+        RequestValidationUtils.requireNonBlank(configKey, "configKey");
         return systemConfigRepository.findByConfigKey(configKey)
                 .orElseThrow(() -> new RuntimeException("Config not found: " + configKey));
     }
@@ -47,6 +50,9 @@ public class SystemConfigService {
      * @return 系统配置
      */
     public SystemConfig saveConfig(String configKey, String configValue, ConfigType configType) {
+        RequestValidationUtils.requireNonBlank(configKey, "configKey");
+        RequestValidationUtils.requireNonBlank(configValue, "configValue");
+        RequestValidationUtils.requireNonNull(configType, "configType");
         SystemConfig config = systemConfigRepository.findByConfigKey(configKey).orElse(new SystemConfig());
         config.setConfigKey(configKey);
         config.setConfigValue(configValue);
@@ -59,10 +65,12 @@ public class SystemConfigService {
      * @param id 配置ID
      */
     public void deleteConfig(Long id) {
-        if (!systemConfigRepository.existsById(id)) {
-            throw new RuntimeException("Config not found: " + id);
+        RequestValidationUtils.requireNonNull(id, "id");
+        Long safeId = Objects.requireNonNull(id);
+        if (!systemConfigRepository.existsById(safeId)) {
+            throw new RuntimeException("Config not found: " + safeId);
         }
-        systemConfigRepository.deleteById(id);
+        systemConfigRepository.deleteById(safeId);
     }
 
     /**
@@ -86,3 +94,5 @@ public class SystemConfigService {
             .orElseThrow(() -> new RuntimeException("DashScope API Key not configured"));
     }
 }
+
+

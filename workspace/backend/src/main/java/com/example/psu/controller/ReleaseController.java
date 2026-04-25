@@ -1,14 +1,7 @@
 package com.example.psu.controller;
 
-import com.example.psu.dto.request.CreateReleaseRequest;
-import com.example.psu.dto.request.ReleaseRuleRequest;
-import com.example.psu.dto.request.ResolvePromptRequest;
-import com.example.psu.dto.request.ReviewReleaseRequest;
-import com.example.psu.dto.request.RollbackReleaseRequest;
-import com.example.psu.dto.response.ResolvePromptResponse;
-import com.example.psu.entity.PromptRelease;
-import com.example.psu.entity.PromptReleaseRule;
-import com.example.psu.service.ReleaseService;
+import java.util.List;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -19,11 +12,18 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
+import com.example.psu.dto.request.CreateReleaseRequest;
+import com.example.psu.dto.request.ReleaseRuleRequest;
+import com.example.psu.dto.request.ResolvePromptRequest;
+import com.example.psu.dto.request.ReviewReleaseRequest;
+import com.example.psu.dto.request.RollbackReleaseRequest;
+import com.example.psu.dto.response.ResolvePromptResponse;
+import com.example.psu.entity.PromptRelease;
+import com.example.psu.entity.PromptReleaseRule;
+import com.example.psu.service.ReleaseService;
 
 /**
  * 发布域控制器
@@ -124,3 +124,4 @@ public class ReleaseController {
         return ResponseEntity.ok(releaseService.resolve(request));
     }
 }
+

@@ -29,3 +29,4 @@ public interface CompositionService {
 
     Optional<PromptCompositionRevision> getLatestRevision(Long compositionId);
 }
+

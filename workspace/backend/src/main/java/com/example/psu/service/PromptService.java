@@ -4,6 +4,7 @@ import com.example.psu.dto.request.CreatePromptRequest;
 import com.example.psu.entity.PromptFragment;
 import com.example.psu.entity.PsuUnit;
 import com.example.psu.enums.PsuStatus;
+import com.example.psu.exception.RequestValidationUtils;
 import com.example.psu.repository.PromptFragmentRepository;
 import com.example.psu.repository.PsuRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,6 +12,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -32,11 +34,13 @@ public class PromptService {
      * @return Prompt片段列表
      */
     public List<PromptFragment> getPromptFragments(Long psuId) {
+        RequestValidationUtils.requireNonNull(psuId, "psuId");
+        Long safePsuId = Objects.requireNonNull(psuId);
         // 检查PSU是否存在
-        PsuUnit psu = psuRepository.findById(psuId)
-                .orElseThrow(() -> new RuntimeException("PSU not found: " + psuId));
+        psuRepository.findById(safePsuId)
+                .orElseThrow(() -> new RuntimeException("PSU not found: " + safePsuId));
         
-        return promptFragmentRepository.findByPsuIdOrderBySortOrderAsc(psuId);
+        return promptFragmentRepository.findByPsuIdOrderBySortOrderAsc(safePsuId);
     }
     
     /**
@@ -46,21 +50,26 @@ public class PromptService {
      * @return 创建的片段
      */
     public PromptFragment createPromptFragment(CreatePromptRequest request, Long userId) {
+        RequestValidationUtils.requireNonNull(request, "request");
+        RequestValidationUtils.requireNonNull(request.getPsuId(), "psuId");
+        RequestValidationUtils.requireNonBlank(request.getFragmentKey(), "fragmentKey");
+        RequestValidationUtils.requireNonBlank(request.getContent(), "content");
+        Long safePsuId = Objects.requireNonNull(request.getPsuId());
         // 检查PSU是否存在
-        PsuUnit psu = psuRepository.findById(request.getPsuId())
-                .orElseThrow(() -> new RuntimeException("PSU not found: " + request.getPsuId()));
+        PsuUnit psu = psuRepository.findById(safePsuId)
+                .orElseThrow(() -> new RuntimeException("PSU not found: " + safePsuId));
         assertDraftEditable(psu);
         
         // 检查fragmentKey是否已存在
         Optional<PromptFragment> existingFragment = promptFragmentRepository
-                .findByPsuIdAndFragmentKey(request.getPsuId(), request.getFragmentKey());
+                .findByPsuIdAndFragmentKey(safePsuId, request.getFragmentKey());
         if (existingFragment.isPresent()) {
             throw new RuntimeException("该PSU下已存在相同标识的Prompt片段: " + request.getFragmentKey());
         }
         
         // 创建新的Prompt片段
         PromptFragment fragment = new PromptFragment();
-        fragment.setPsuId(request.getPsuId());
+        fragment.setPsuId(safePsuId);
         fragment.setFragmentKey(request.getFragmentKey());
         fragment.setContent(request.getContent());
         fragment.setEditable(request.getEditable());
@@ -81,12 +90,16 @@ public class PromptService {
      * @return 更新后的片段
      */
     public PromptFragment updatePromptFragment(Long fragmentId, String content, Long userId) {
+        RequestValidationUtils.requireNonNull(fragmentId, "fragmentId");
+        RequestValidationUtils.requireNonBlank(content, "content");
+        Long safeFragmentId = Objects.requireNonNull(fragmentId);
         // 获取片段
-        PromptFragment fragment = promptFragmentRepository.findById(fragmentId)
-                .orElseThrow(() -> new RuntimeException("Prompt fragment not found: " + fragmentId));
+        PromptFragment fragment = promptFragmentRepository.findById(safeFragmentId)
+                .orElseThrow(() -> new RuntimeException("Prompt fragment not found: " + safeFragmentId));
 
-        PsuUnit psu = psuRepository.findById(fragment.getPsuId())
-                .orElseThrow(() -> new RuntimeException("PSU not found: " + fragment.getPsuId()));
+        Long fragmentPsuId = Objects.requireNonNull(fragment.getPsuId());
+        PsuUnit psu = psuRepository.findById(fragmentPsuId)
+                .orElseThrow(() -> new RuntimeException("PSU not found: " + fragmentPsuId));
         assertDraftEditable(psu);
 
         // 已定版的Prompt（editable=false）所有人不可修改
@@ -113,12 +126,15 @@ public class PromptService {
      * @param userId 用户ID
      */
     public void deletePromptFragment(Long fragmentId, Long userId) {
+        RequestValidationUtils.requireNonNull(fragmentId, "fragmentId");
+        Long safeFragmentId = Objects.requireNonNull(fragmentId);
         // 获取片段
-        PromptFragment fragment = promptFragmentRepository.findById(fragmentId)
-                .orElseThrow(() -> new RuntimeException("Prompt fragment not found: " + fragmentId));
+        PromptFragment fragment = promptFragmentRepository.findById(safeFragmentId)
+                .orElseThrow(() -> new RuntimeException("Prompt fragment not found: " + safeFragmentId));
 
-        PsuUnit psu = psuRepository.findById(fragment.getPsuId())
-                .orElseThrow(() -> new RuntimeException("PSU not found: " + fragment.getPsuId()));
+        Long fragmentPsuId = Objects.requireNonNull(fragment.getPsuId());
+        PsuUnit psu = psuRepository.findById(fragmentPsuId)
+                .orElseThrow(() -> new RuntimeException("PSU not found: " + fragmentPsuId));
         assertDraftEditable(psu);
 
         // 已定版的Prompt不能删除
@@ -126,7 +142,7 @@ public class PromptService {
             throw new RuntimeException("已定版的Prompt片段不允许删除");
         }
         
-        promptFragmentRepository.deleteById(fragmentId);
+        promptFragmentRepository.deleteById(safeFragmentId);
     }
     
     /**
@@ -136,12 +152,15 @@ public class PromptService {
      * @return 定版后的片段
      */
     public PromptFragment finalizePromptFragment(Long fragmentId, Long userId) {
+        RequestValidationUtils.requireNonNull(fragmentId, "fragmentId");
+        Long safeFragmentId = Objects.requireNonNull(fragmentId);
         // 获取片段
-        PromptFragment fragment = promptFragmentRepository.findById(fragmentId)
-                .orElseThrow(() -> new RuntimeException("Prompt fragment not found: " + fragmentId));
+        PromptFragment fragment = promptFragmentRepository.findById(safeFragmentId)
+                .orElseThrow(() -> new RuntimeException("Prompt fragment not found: " + safeFragmentId));
 
-        PsuUnit psu = psuRepository.findById(fragment.getPsuId())
-                .orElseThrow(() -> new RuntimeException("PSU not found: " + fragment.getPsuId()));
+        Long fragmentPsuId = Objects.requireNonNull(fragment.getPsuId());
+        PsuUnit psu = psuRepository.findById(fragmentPsuId)
+                .orElseThrow(() -> new RuntimeException("PSU not found: " + fragmentPsuId));
         assertDraftEditable(psu);
 
         // 如果已经定版，不允许重复定版
@@ -162,6 +181,8 @@ public class PromptService {
      * @return 测试结果
      */
     public String testPrompt(Long psuId, Map<String, Object> inputParams) {
+        RequestValidationUtils.requireNonNull(psuId, "psuId");
+        RequestValidationUtils.requireNonNull(inputParams, "inputParams");
         // 获取所有Prompt片段
         List<PromptFragment> fragments = getPromptFragments(psuId);
         
@@ -180,6 +201,8 @@ public class PromptService {
      * @return 完整Prompt
      */
     public String assembleFullPrompt(List<PromptFragment> fragments, Map<String, Object> variables) {
+        RequestValidationUtils.requireNonNull(fragments, "fragments");
+        RequestValidationUtils.requireNonNull(variables, "variables");
         StringBuilder sb = new StringBuilder();
         
         // 按排序顺序组装
@@ -208,3 +231,5 @@ public class PromptService {
         }
     }
 }
+
+

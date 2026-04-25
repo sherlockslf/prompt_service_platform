@@ -3,10 +3,10 @@ package com.example.psu.service;
 import com.example.psu.dto.PsuCreateRequest;
 import com.example.psu.dto.response.PsuResponse;
 import com.example.psu.entity.PsuUnit;
-import com.example.psu.entity.User;
 import com.example.psu.enums.PsuStatus;
 import com.example.psu.exception.BusinessException;
 import com.example.psu.exception.ErrorCode;
+import com.example.psu.exception.RequestValidationUtils;
 import com.example.psu.repository.PsuRepository;
 import com.example.psu.repository.UserRepository;
 import org.springframework.beans.BeanUtils;
@@ -16,6 +16,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+
+import java.util.Objects;
 
 /**
  * PSU管理服务
@@ -36,6 +38,10 @@ public class PsuService {
      * @return 创建的PSU
      */
     public PsuUnit createPsu(PsuCreateRequest request, Long creatorId) {
+        request = RequestValidationUtils.requireNonNull(request, "request");
+        RequestValidationUtils.requireNonBlank(request.getPsuId(), "psuId");
+        RequestValidationUtils.requireNonBlank(request.getName(), "name");
+        RequestValidationUtils.requireNonNull(creatorId, "creatorId");
         // 检查PSU ID是否已存在
         if (psuRepository.existsByPsuId(request.getPsuId())) {
             throw new BusinessException(ErrorCode.PSU_ALREADY_EXISTS, "PSU ID已存在: " + request.getPsuId());
@@ -71,8 +77,11 @@ public class PsuService {
      * @return 更新后的PSU
      */
     public PsuUnit updatePsu(Long id, PsuCreateRequest request) {
-        PsuUnit psu = psuRepository.findById(id)
-            .orElseThrow(() -> new BusinessException(ErrorCode.PSU_NOT_FOUND, "PSU不存在，ID: " + id));
+        RequestValidationUtils.requireNonNull(id, "id");
+        request = RequestValidationUtils.requireNonNull(request, "request");
+        Long safeId = Objects.requireNonNull(id);
+        PsuUnit psu = psuRepository.findById(safeId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.PSU_NOT_FOUND, "PSU不存在，ID: " + safeId));
         
         // 仅草稿允许编辑，候选/正式/归档均只读
         if (psu.getStatus() != PsuStatus.DRAFT) {
@@ -92,8 +101,10 @@ public class PsuService {
      * @return PSU信息
      */
     public PsuUnit getPsuById(Long id) {
-        return psuRepository.findById(id)
-            .orElseThrow(() -> new BusinessException(ErrorCode.PSU_NOT_FOUND, "PSU不存在，ID: " + id));
+        RequestValidationUtils.requireNonNull(id, "id");
+        Long safeId = Objects.requireNonNull(id);
+        return psuRepository.findById(safeId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.PSU_NOT_FOUND, "PSU不存在，ID: " + safeId));
     }
     
     /**
@@ -102,6 +113,7 @@ public class PsuService {
      * @return PSU信息
      */
     public PsuUnit getPsuByPsuId(String psuId) {
+        RequestValidationUtils.requireNonBlank(psuId, "psuId");
         return psuRepository.findByPsuId(psuId)
             .orElseThrow(() -> new BusinessException(ErrorCode.PSU_NOT_FOUND, "PSU不存在，PSU ID: " + psuId));
     }
@@ -111,8 +123,10 @@ public class PsuService {
      * @param id PSU数据库ID
      */
     public void deletePsu(Long id) {
-        PsuUnit psu = psuRepository.findById(id)
-            .orElseThrow(() -> new BusinessException(ErrorCode.PSU_NOT_FOUND, "PSU不存在，ID: " + id));
+        RequestValidationUtils.requireNonNull(id, "id");
+        Long safeId = Objects.requireNonNull(id);
+        PsuUnit psu = psuRepository.findById(safeId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.PSU_NOT_FOUND, "PSU不存在，ID: " + safeId));
         
         // 正式版禁止删除；非正式状态统一归档
         if (psu.getStatus() == PsuStatus.FORMAL) {
@@ -128,16 +142,21 @@ public class PsuService {
      * @return PSU响应DTO
      */
     public PsuResponse convertToResponse(PsuUnit psu) {
+        RequestValidationUtils.requireNonNull(psu, "psu");
+        PsuUnit safePsu = Objects.requireNonNull(psu);
         PsuResponse response = new PsuResponse();
-        BeanUtils.copyProperties(psu, response);
-        response.setStatus(psu.getStatus().getCode());
-        response.setVersionNo(psu.getVersionNo());
+        BeanUtils.copyProperties(safePsu, response);
+        response.setStatus(safePsu.getStatus().getCode());
+        response.setVersionNo(safePsu.getVersionNo());
         
         // 获取创建者名称
-        userRepository.findById(psu.getCreatorId()).ifPresent(creator -> {
+        Long creatorId = Objects.requireNonNull(safePsu.getCreatorId());
+        userRepository.findById(creatorId).ifPresent(creator -> {
             response.setCreatorName(creator.getUsername());
         });
         
         return response;
     }
 }
+
+

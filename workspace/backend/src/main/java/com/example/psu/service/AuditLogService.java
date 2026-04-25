@@ -1,6 +1,7 @@
 package com.example.psu.service;
 
 import com.example.psu.entity.AuditLog;
+import com.example.psu.exception.RequestValidationUtils;
 import com.example.psu.repository.AuditLogRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -30,6 +31,7 @@ public class AuditLogService {
      * @return 审计日志列表
      */
     public List<AuditLog> getAuditLogsByUserId(Long userId) {
+        RequestValidationUtils.requireNonNull(userId, "userId");
         return auditLogRepository.findByUserIdOrderByCreatedAtDesc(userId);
     }
     
@@ -39,6 +41,11 @@ public class AuditLogService {
      * @return 创建的审计日志
      */
     public AuditLog createAuditLog(AuditLog auditLog) {
+        auditLog = RequestValidationUtils.requireNonNull(auditLog, "auditLog");
+        RequestValidationUtils.requireNonBlank(auditLog.getOperation(), "operation");
+        RequestValidationUtils.requireNonNull(auditLog.getUserId(), "userId");
         return auditLogRepository.save(auditLog);
     }
 }
+
+

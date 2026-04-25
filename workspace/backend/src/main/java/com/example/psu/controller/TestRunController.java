@@ -48,3 +48,4 @@ public class TestRunController {
         return ResponseEntity.ok(testRunService.getRun(runId));
     }
 }
+

@@ -46,7 +46,7 @@ public class TestDatasetController {
      */
     @PostMapping
     public ResponseEntity<TestDataset> createTestDataset(
-            @RequestParam Long psuId, 
+            @RequestParam Long psuId,
             @Valid @RequestBody TestDatasetCreateRequest request) {
         TestDataset dataset = testDatasetService.createTestDataset(psuId, request);
         return ResponseEntity.ok(dataset);
@@ -58,7 +58,7 @@ public class TestDatasetController {
      */
     @PutMapping("/{id}")
     public ResponseEntity<TestDataset> updateTestDataset(
-            @PathVariable Long id, 
+            @PathVariable Long id,
             @Valid @RequestBody TestDatasetCreateRequest request) {
         TestDataset dataset = testDatasetService.updateTestDataset(id, request);
         return ResponseEntity.ok(dataset);
@@ -74,3 +74,4 @@ public class TestDatasetController {
         return ResponseEntity.ok().build();
     }
 }
+

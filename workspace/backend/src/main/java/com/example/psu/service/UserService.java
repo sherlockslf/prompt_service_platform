@@ -3,6 +3,7 @@ package com.example.psu.service;
 import com.example.psu.dto.AuthRequest;
 import com.example.psu.dto.AuthResponse;
 import com.example.psu.entity.User;
+import com.example.psu.exception.RequestValidationUtils;
 import com.example.psu.repository.UserRepository;
 import com.example.psu.security.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,6 +14,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * 用户服务
@@ -35,6 +37,9 @@ public class UserService {
      * @return 认证响应
      */
     public AuthResponse authenticate(AuthRequest authRequest) {
+        authRequest = RequestValidationUtils.requireNonNull(authRequest, "authRequest");
+        RequestValidationUtils.requireNonBlank(authRequest.getUsername(), "username");
+        RequestValidationUtils.requireNonBlank(authRequest.getPassword(), "password");
         try {
             Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
@@ -70,6 +75,11 @@ public class UserService {
      * @return 创建的用户
      */
     public User createUser(User user) {
+        user = RequestValidationUtils.requireNonNull(user, "user");
+        RequestValidationUtils.requireNonBlank(user.getUsername(), "username");
+        RequestValidationUtils.requireNonBlank(user.getPassword(), "password");
+        RequestValidationUtils.requireNonNull(user.getRole(), "role");
+        RequestValidationUtils.requireNonNull(user.getEnabled(), "enabled");
         if (userRepository.existsByUsername(user.getUsername())) {
             throw new RuntimeException("Username already exists");
         }
@@ -84,8 +94,10 @@ public class UserService {
      * @return 更新后的用户
      */
     public User toggleUserStatus(Long id) {
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("User not found: " + id));
+        RequestValidationUtils.requireNonNull(id, "id");
+        Long safeId = Objects.requireNonNull(id);
+        User user = userRepository.findById(safeId)
+                .orElseThrow(() -> new RuntimeException("User not found: " + safeId));
         user.setEnabled(!user.getEnabled());
         return userRepository.save(user);
     }
@@ -112,3 +124,5 @@ public class UserService {
         return new AuthResponse("", "guest", "BUSINESS");
     }
 }
+
+

@@ -23,6 +23,7 @@ import com.example.psu.entity.PromptFragment;
 import com.example.psu.service.PromptService;
 
 import jakarta.validation.Valid;
+import java.util.Objects;
 
 /**
  * Prompt管理控制器
@@ -66,7 +67,7 @@ public class PromptController {
      */
     @PutMapping("/{fragmentId}")
     public ResponseEntity<PromptFragmentResponse> updatePromptFragment(
-            @PathVariable Long fragmentId, 
+            @PathVariable Long fragmentId,
             @Valid @RequestBody UpdatePromptRequest requestBody) {
         PromptFragment fragment = promptService.updatePromptFragment(fragmentId, requestBody.getContent(), DEFAULT_OPERATOR_ID);
         PromptFragmentResponse response = convertToResponse(fragment);
@@ -108,9 +109,11 @@ public class PromptController {
      * 将Prompt片段实体转换为响应DTO
      */
     private PromptFragmentResponse convertToResponse(PromptFragment fragment) {
+        Objects.requireNonNull(fragment, "fragment不能为空");
         PromptFragmentResponse response = new PromptFragmentResponse();
         BeanUtils.copyProperties(fragment, response);
         response.setType(fragment.getType().getCode());
         return response;
     }
 }
+
