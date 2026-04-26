@@ -51,7 +51,8 @@ const routes = [
   },
   {
     path: '/',
-    redirect: '/business'
+    name: 'Home',
+    component: BusinessDashboard
   }
 ]
 

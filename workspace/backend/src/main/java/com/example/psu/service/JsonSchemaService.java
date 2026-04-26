@@ -44,7 +44,7 @@ public class JsonSchemaService {
                 .orElseThrow(() -> new RuntimeException("PSU not found: " + safePsuId));
 
         return jsonSchemaRepository.findByPsuId(safePsuId)
-                .orElseThrow(() -> new RuntimeException("Schema not found for PSU: " + safePsuId));
+                .orElseGet(() -> initializeEmptySchema(safePsuId, userId));
     }
     
     /**
@@ -105,6 +105,16 @@ public class JsonSchemaService {
         return jsonSchemaRepository.findByPsuId(psuId)
                 .map(List::of)
                 .orElse(List.of());
+    }
+
+    private JsonSchema initializeEmptySchema(Long psuId, Long userId) {
+        JsonSchema schema = new JsonSchema();
+        schema.setPsuId(psuId);
+        schema.setSchemaContent("{}");
+        schema.setVersion(1);
+        schema.setModifiedBy(userId == null ? 0L : userId);
+        schema.setChangeLog("初始化空Schema");
+        return jsonSchemaRepository.save(schema);
     }
 }
 

@@ -1,7 +1,7 @@
 <template>
   <div class="admin-dashboard">
     <el-container>
-      <el-aside width="200px" class="sidebar">
+      <el-aside :width="sidebarWidth" class="sidebar" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
         <el-menu default-active="1" class="menu" @select="handleMenuSelect">
           <el-menu-item index="1">
             <span>用户管理</span>
@@ -13,8 +13,17 @@
             <span>审计日志</span>
           </el-menu-item>
         </el-menu>
+        <button
+          class="sidebar-toggle"
+          type="button"
+          @click="toggleSidebar"
+          :aria-label="isSidebarCollapsed ? '展开导航栏' : '收起导航栏'"
+          :title="isSidebarCollapsed ? '展开导航栏' : '收起导航栏'"
+        >
+          <span :class="isSidebarCollapsed ? 'triangle-right' : 'triangle-left'"></span>
+        </button>
       </el-aside>
-      <el-main class="main-content">
+      <el-main class="main-content" :class="{ 'main-content-collapsed': isSidebarCollapsed }">
         <div v-if="activeMenu === '1'" class="content-section">
           <h2>用户管理</h2>
           <el-button type="primary" @click="showCreateUserDialog = true">新增用户</el-button>
@@ -90,11 +99,12 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { userApi, auditLogApi, configApi } from '@/services/api'
 import { ElMessage } from 'element-plus'
 
 const activeMenu = ref('1')
+const isSidebarCollapsed = ref(false)
 const showCreateUserDialog = ref(false)
 
 // 用户数据
@@ -130,6 +140,12 @@ const userRules = {
 // 菜单选择处理
 const handleMenuSelect = (index) => {
   activeMenu.value = index
+}
+
+const sidebarWidth = computed(() => (isSidebarCollapsed.value ? '56px' : '200px'))
+
+const toggleSidebar = () => {
+  isSidebarCollapsed.value = !isSidebarCollapsed.value
 }
 
 // 切换用户状态
@@ -225,8 +241,53 @@ onMounted(() => {
   left: 0;
 }
 
+.sidebar-collapsed {
+  overflow: visible;
+}
+
 .menu {
   border-right: none;
+}
+
+.sidebar-collapsed :deep(.el-menu-item span) {
+  display: none;
+}
+
+.sidebar-collapsed :deep(.el-menu-item) {
+  justify-content: center;
+  padding: 0;
+}
+
+.sidebar-toggle {
+  position: absolute;
+  top: 12px;
+  right: -14px;
+  width: 28px;
+  height: 28px;
+  border: 1px solid #dcdfe6;
+  border-radius: 14px;
+  background: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+}
+
+.triangle-left {
+  width: 0;
+  height: 0;
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+  border-right: 10px solid #606266;
+}
+
+.triangle-right {
+  width: 0;
+  height: 0;
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+  border-left: 10px solid #606266;
 }
 
 .main-content {
@@ -234,6 +295,10 @@ onMounted(() => {
   min-height: calc(100vh - var(--layout-header-height));
   padding: 20px;
   overflow-y: auto;
+}
+
+.main-content-collapsed {
+  margin-left: 56px;
 }
 
 .content-section {

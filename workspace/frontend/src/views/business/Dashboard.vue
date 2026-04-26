@@ -1,7 +1,7 @@
 <template>
   <div class="business-dashboard">
     <el-container>
-      <el-aside width="200px" class="sidebar">
+      <el-aside :width="sidebarWidth" class="sidebar" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
         <el-menu :default-active="activeMenu" class="menu" @select="handleMenuSelect">
           <el-menu-item index="1">
             <span>PSU列表</span>
@@ -28,8 +28,17 @@
             <span>系统管理</span>
           </el-menu-item>
         </el-menu>
+        <button
+          class="sidebar-toggle"
+          type="button"
+          @click="toggleSidebar"
+          :aria-label="isSidebarCollapsed ? '展开导航栏' : '收起导航栏'"
+          :title="isSidebarCollapsed ? '展开导航栏' : '收起导航栏'"
+        >
+          <span :class="isSidebarCollapsed ? 'triangle-right' : 'triangle-left'"></span>
+        </button>
       </el-aside>
-      <el-main class="main-content">
+      <el-main class="main-content" :class="{ 'main-content-collapsed': isSidebarCollapsed }">
         <!-- PSU列表 -->
         <div v-if="activeMenu === '1'" class="content-section">
           <div class="header-section">
@@ -373,12 +382,15 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { psuApi, schemaApi, promptApi, versionApi, versionReviewApi } from '@/services/api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import ReleaseCenter from '@/views/developer/ReleaseCenter.vue'
 
 const activeMenu = ref('1')
+const router = useRouter()
+const isSidebarCollapsed = ref(false)
 const showSchemaDialog = ref(false)
 const showCreatePsuDialog = ref(false)
 const showEditPsuDialog = ref(false)
@@ -446,8 +458,19 @@ const isBusinessUser = ref(true)
 
 // 菜单选择处理
 const handleMenuSelect = (index) => {
-  // 统一在当前页面切换模块，避免左侧导航栏因跨路由跳转发生变化
+  // Prompt编排改为容器页面，避免继续使用旧的内嵌编辑区。
+  if (index === '2') {
+    router.push('/business/composer')
+    return
+  }
+  // 其他模块仍在当前页面切换
   activeMenu.value = index
+}
+
+const sidebarWidth = computed(() => (isSidebarCollapsed.value ? '56px' : '200px'))
+
+const toggleSidebar = () => {
+  isSidebarCollapsed.value = !isSidebarCollapsed.value
 }
 
 // 分页切换
@@ -950,8 +973,53 @@ onMounted(() => {
   left: 0;
 }
 
+.sidebar-collapsed {
+  overflow: visible;
+}
+
 .menu {
   border-right: none;
+}
+
+.sidebar-collapsed :deep(.el-menu-item span) {
+  display: none;
+}
+
+.sidebar-collapsed :deep(.el-menu-item) {
+  justify-content: center;
+  padding: 0;
+}
+
+.sidebar-toggle {
+  position: absolute;
+  top: 12px;
+  right: -14px;
+  width: 28px;
+  height: 28px;
+  border: 1px solid #dcdfe6;
+  border-radius: 14px;
+  background: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+}
+
+.triangle-left {
+  width: 0;
+  height: 0;
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+  border-right: 10px solid #606266;
+}
+
+.triangle-right {
+  width: 0;
+  height: 0;
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+  border-left: 10px solid #606266;
 }
 
 .main-content {
@@ -959,6 +1027,10 @@ onMounted(() => {
   min-height: calc(100vh - var(--layout-header-height));
   padding: 20px;
   overflow-y: auto;
+}
+
+.main-content-collapsed {
+  margin-left: 56px;
 }
 
 .content-section {
