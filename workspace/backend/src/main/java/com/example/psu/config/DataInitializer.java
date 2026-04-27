@@ -18,6 +18,7 @@ import com.example.psu.repository.VersionReviewRepository;
 import com.example.psu.repository.JsonSchemaRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -47,6 +48,9 @@ public class DataInitializer implements CommandLineRunner {
     @Autowired
     private JsonSchemaRepository jsonSchemaRepository;
 
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
     @Override
     public void run(String... args) throws Exception {
         // 启动时统一对齐默认账号，避免历史库里残留错误密码导致无法登录
@@ -64,11 +68,13 @@ public class DataInitializer implements CommandLineRunner {
     private void ensureDefaultUser(String username, String rawPassword, UserRole role) {
         // 查询默认账号是否已存在
         Optional<User> existingOpt = userRepository.findByUsername(username);
+        String encodedPassword = passwordEncoder.encode(rawPassword);
         if (existingOpt.isEmpty()) {
             // 不存在则直接创建默认账号
             User user = new User();
             user.setUsername(username);
-            user.setPassword(rawPassword);
+            // 启动初始化时统一写入加密密码。
+            user.setPassword(encodedPassword);
             user.setRole(role);
             user.setEnabled(true);
             userRepository.save(user);
@@ -80,8 +86,9 @@ public class DataInitializer implements CommandLineRunner {
         User existing = existingOpt.get();
         boolean needUpdate = false;
 
-        if (!rawPassword.equals(existing.getPassword())) {
-            existing.setPassword(rawPassword);
+        // 密码不匹配时自动修正为最新默认口令的加密值。
+        if (existing.getPassword() == null || !passwordEncoder.matches(rawPassword, existing.getPassword())) {
+            existing.setPassword(encodedPassword);
             needUpdate = true;
         }
         if (existing.getRole() != role) {
