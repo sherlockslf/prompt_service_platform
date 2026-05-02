@@ -1,5 +1,8 @@
 # Prompt Service Platform
 
+**文档版本**：V1.9（开发进展同步）  
+**版本时间**：2026-04-29
+
 > 目标：构建一个面向企业内部的 Prompt 研发平台，覆盖提示词模板研发、服务化发布、版本治理、测试评估与可追溯运营。
 
 ## 1. 项目定位
@@ -12,7 +15,7 @@
 4. 对话结果评估（幻觉、连贯性、相关性等多维度）
 5. 代码自动生成（Java/Python 调用模板、Schema 入参组装示例）
 
-当前代码已具备「PSU + Schema + Prompt + 编排 + 提审审核 + 测试集运行 + 代码生成入口」主干能力，但灰度/回滚、评估能力与代码生成落地深度仍不足。
+当前代码已具备「PSU + Schema + Prompt + 编排 + 提审审核 + 测试集运行 + 代码生成 + 发布中心 + 线上 resolve 解析」主干能力，但鉴权与权限边界、评估能力与代码生成落地深度仍不足。
 
 ## 2. 当前架构
 
@@ -120,11 +123,11 @@ sequenceDiagram
 
 | 模块 | 目标 | 当前完成度 | 现状结论 |
 | --- | --- | --- | --- |
-| 模块1：提示词模板编辑与调试 | 模板编辑、变量注入、渲染调试 | 70% | 已有可用编排页和变量注入校验，测试链路仍有 Mock 化 |
-| 模块2：对外提示词服务与版本治理 | 查询、版本、灰度、回滚 | 55% | 已有版本提交/审核/快照框架，且已补齐发布域数据模型骨架；灰度路由执行与回滚服务链路待实现 |
-| 模块3：Schema + 测试集 | Schema版本与测试集管理 | 75% | Schema/测试集 CRUD 已有，约束体系与契约校验有待加强 |
-| 模块4：Prompt 评估 | 幻觉/连贯性/相关性评估 | 10% | 仅有测试运行记录，不存在独立评估模型、评估任务、评估报告体系 |
-| 模块5：代码自动生成 | 为 Java/Python 提供调用代码与数据组装模板 | 40% | 已有审核后生成代码文本能力，但仍以 Java 骨架为主，缺少 Python 产物、Schema 强类型映射与发布绑定 |
+| 模块1：提示词模板编辑与调试 | 模板编辑、变量注入、渲染调试 | 78% | 已统一编排页测试入口为后端接口，支持结构化测试结果返回 |
+| 模块2：对外提示词服务与版本治理 | 查询、版本、灰度、回滚 | 70% | 已具备发布单、灰度规则、回滚记录与 resolve 路由能力；生产级权限收敛与治理闭环仍待加强 |
+| 模块3：Schema + 测试集 | Schema版本与测试集管理 | 86% | 已补齐测试集批量运行链路与Schema版本历史抽屉展示，约束体系仍可继续加强 |
+| 模块4：Prompt 评估 | 幻觉/连贯性/相关性评估 | 42% | 已具备评估任务、执行、报告查询与前端评估中心 MVP，评分仍为规则占位 |
+| 模块5：代码自动生成 | 为 Java/Python 提供调用代码与数据组装模板 | 52% | 已支持 `language=java/python` 双模板生成与前端语言切换，仍缺 Schema 强类型映射与发布绑定 |
 
 ## 4. 已实现能力清单（按模块）
 
@@ -135,6 +138,7 @@ sequenceDiagram
 - Schema 字段存在性校验：保存与提交时会对变量路径做检查
 - 渲染预览：支持根据输入参数替换变量并返回缺失变量列表
 - 前端编排工作台：PSU 选择、Schema 变量面板、测试数据集联动预览
+- Prompt测试统一接口：主编排页测试统一走 `POST /api/prompts/{psuId}/test`，返回结构化测试结果
 
 ### 4.2 模块2：对外提示词服务与版本治理（已实现部分）
 
@@ -143,7 +147,11 @@ sequenceDiagram
 - 驳回分流：支持 `BACK_TO_DEV` 与 `BACK_TO_BIZ`
 - 代码生成入口：审核通过后可拉取生成代码文本
 - 版本对比与回滚：支持按 `version_no` 对比与内容回滚
-- 发布域数据模型骨架：已新增发布单、发布规则、生效版本指针、回滚记录表与后端实体仓储
+- 发布管理：支持发布单创建、审批、执行、历史查询
+- 灰度路由：支持白名单/标签/比例策略并在 `resolve` 链路执行命中
+- 生效版本指针：支持稳定版本与灰度版本路由切换，并记录回滚历史
+- 审核预览增强：`/api/versions/{reviewId}/preview` 已回传参数集快照，前端可直观看到预览输入上下文
+- Git台账登记：支持 `POST /api/versions/{reviewId}/git-commit`，并新增 hash 格式校验与前端登记入口
 
 ### 4.3 模块3：Schema + 测试集（已实现部分）
 
@@ -151,26 +159,129 @@ sequenceDiagram
 - 参数集覆盖写管理：按 PSU 维护当前参数集，并用于审核预览
 - 测试集管理：支持数据集创建、更新、删除、列表查询
 - 测试运行记录：保存 run 主记录和 case 明细（输入、渲染结果、耗时）
+- 测试运行历史：支持 `GET /api/test-runs?psuId=&datasetId=` 查询最近运行记录，前端可查看与回看详情
+- 测试状态与异常原因：run 与 case 两层均保留 `status` 与 `exceptionReason` 字段，便于定位失败根因
+- 实际输出语义统一：测试明细仅保留“实际输出”语义（兼容历史字段 `model_output`）
+- Schema版本历史视图：支持 `GET /api/schemas/{psuId}/versions` 返回并在Schema编辑区抽屉展示（含变更日志与更新时间）
 
-### 4.4 模块4：Prompt 评估（当前空缺）
+## 4.6 近期开发进展（2026-04-29）
 
-- 未发现评估实体、评估任务队列、评估指标定义、评估报告接口
-- 未发现针对幻觉/连贯性/相关性的评分协议或模型调用链路
+- 已完成模块A首批落地：Prompt测试接口结构化返回（`renderedPrompt/missingVars/latencyMs/traceId`）。
+- 已完成模块B首批落地：批量测试组件已挂载到编排页，并支持运行历史与详情回看。
+- 已完成模块B补充落地：测试运行新增状态与异常原因字段，数据库仅保存不做业务校验，统一由 Java 后端校验。
+- 已完成模块C局部落地：审核预览支持参数集快照回传，审核列表支持一键预览跳转。
+- 已完成模块D首批落地：Git提交hash前后端链路打通，并增加7-40位十六进制格式校验。
+- 已完成模块E首批落地：代码生成支持 Java/Python 双模板、前端语言切换与元数据展示。
+- 已完成模块H首批落地：Schema版本历史接口与前端抽屉展示打通。
+- 已完成模块G首批落地：后端核心接口支持 `/api` 与 `/api/v1` 双路由，前端支持开关切换前缀。
+- 已完成模块F首批落地：评估任务/执行/报告接口与“评估中心”页面已打通。
+- 已完成模块F体验补齐：支持从测试集列表一键发起评估任务（自动带参进入评估中心）。
+- 已完成模块F任务管理补齐：评估中心支持任务历史列表、按测试集筛选以及历史任务详情/报告回看。
+
+### 4.4 模块4：Prompt 评估（已实现部分）
+
+- 已新增评估主数据模型：`ai_prompt_evaluation_tasks`、`ai_prompt_evaluation_item_results`、`ai_prompt_evaluation_reports`
+- 已新增评估接口：`POST /api/evaluations/tasks`、`POST /api/evaluations/tasks/{id}/run`、`GET /api/evaluations/tasks/{id}`、`GET /api/evaluations/reports/{id}`
+- 已新增评估历史接口：`GET /api/evaluations/tasks?psuId=&datasetId=`（支持按测试集筛选）
+- 已新增评估中心页面：支持选择 PSU/测试集，创建任务、执行任务、查看报告与问题样例
+- 已补齐任务管理视图：支持历史任务列表、详情回看与报告快速打开
+- 评分策略当前为规则化占位（相关性/完整性/格式符合度），后续可接模型评委
+
+### 4.4.1 模块4可视化（新增）
+
+#### A. 业务流程图（评估任务管理闭环）
+
+```mermaid
+flowchart TD
+    A[选择PSU与测试集] --> B[创建评估任务]
+    B --> C[写入任务主记录]
+    C --> CDB[(ai_prompt_evaluation_tasks)]
+    C --> D[执行评估任务]
+    D --> E[逐条渲染与评分]
+    E --> F[写入评估明细]
+    F --> FDB[(ai_prompt_evaluation_item_results)]
+    E --> G[汇总任务状态与均分]
+    G --> CDB
+    G --> H[生成评估报告]
+    H --> HDB[(ai_prompt_evaluation_reports)]
+    H --> I[任务历史列表查询]
+    I --> J[回看任务详情与报告]
+
+    classDef user fill:#e0f2fe,color:#0c4a6e,stroke:#0284c7;
+    classDef be fill:#dcfce7,color:#14532d,stroke:#22c55e;
+    classDef db fill:#fff7ed,color:#9a3412,stroke:#f97316;
+    class A,B,D,E,I,J user;
+    class C,D,E,F,G,H,I,J be;
+    class CDB,FDB,HDB db;
+```
+
+#### B. 关键时序图（创建-执行-回看）
+
+```mermaid
+sequenceDiagram
+    participant FE as EvaluationCenter.vue
+    participant EC as EvaluationController
+    participant ES as EvaluationService
+    participant CS as CompositionService
+    participant DB as MySQL
+
+    FE->>EC: POST /api/evaluations/tasks
+    EC->>ES: createTask(psuId,datasetId)
+    ES->>DB: insert ai_prompt_evaluation_tasks
+    DB-->>ES: taskId
+    ES-->>FE: task summary
+
+    FE->>EC: POST /api/evaluations/tasks/{id}/run
+    EC->>ES: runTask(taskId)
+    ES->>CS: render(case input)
+    CS-->>ES: renderedPrompt/missingVars
+    ES->>DB: insert item_results + update tasks + upsert reports
+    ES-->>FE: task detail + reportId
+
+    FE->>EC: GET /api/evaluations/tasks?psuId=&datasetId=
+    EC->>ES: listTasks(psuId,datasetId)
+    ES->>DB: select top50 tasks
+    ES-->>FE: task list
+```
+
+#### C. 功能模块拓扑图（评估中心）
+
+```mermaid
+flowchart LR
+    FEV[Frontend<br/>EvaluationCenter.vue] --> API[evaluationApi]
+    API --> CTRL[Backend<br/>EvaluationController]
+    CTRL --> SVC[EvaluationService]
+    SVC --> COMP[CompositionService]
+    SVC --> REPO1[EvaluationTaskRepository]
+    SVC --> REPO2[EvaluationItemResultRepository]
+    SVC --> REPO3[EvaluationReportRepository]
+    REPO1 --> DB1[(ai_prompt_evaluation_tasks)]
+    REPO2 --> DB2[(ai_prompt_evaluation_item_results)]
+    REPO3 --> DB3[(ai_prompt_evaluation_reports)]
+
+    classDef fe fill:#dbeafe,color:#1e3a8a,stroke:#1d4ed8;
+    classDef be fill:#dcfce7,color:#166534,stroke:#16a34a;
+    classDef data fill:#fff7ed,color:#9a3412,stroke:#f97316;
+    class FEV,API fe;
+    class CTRL,SVC,COMP,REPO1,REPO2,REPO3 be;
+    class DB1,DB2,DB3 data;
+```
 
 ### 4.5 模块5：代码自动生成（已实现部分）
 
 - 已有后端代码生成服务入口：审核通过时可生成并写入 `VersionReview.codeContent`
-- 已有获取代码接口：`GET /api/versions/{psuId}/code`
+- 已有获取代码接口：`GET /api/versions/{psuId}/code`（支持 `language=java|python`）
 - 已有前端代码生成页面：支持选择 PSU、预览代码、复制与下载
 - 已有基础测试覆盖：版本审核服务测试已覆盖审核通过后触发代码生成
+- 已支持下载文件名规范化：`psu-{id}-{language}-{timestamp}.{ext}`
 
 ## 5. 关键缺口与风险
 
 ### 5.1 模块2（版本治理）关键缺口
 
-- 缺少“生产态 Prompt 服务”协议：当前偏后台管理，不是可供业务系统稳定调用的发布服务
-- 缺少灰度发布：无流量分配策略（按租户/请求头/比例/标签）
-- 缺少回滚执行链路：无“生效版本指针”与原子切换机制
+- 发布与解析接口已具备基础能力，但生产级鉴权、边界隔离与审计约束尚未闭环
+- 灰度策略已支持白名单/标签/比例命中，但策略治理与可观测能力仍不足
+- 回滚链路已落地，仍需补充更严格的原子切换与发布门禁保障
 - 版本号策略未闭环：提审与审核存在，但主/次/修订号与发布动作绑定不充分
 
 ### 5.2 模块1/3 共性缺口
@@ -181,17 +292,17 @@ sequenceDiagram
 
 ### 5.3 模块4 关键缺口
 
-- 缺少评估数据模型（评估维度、评分、解释、证据）
-- 缺少离线/在线评估任务调度
+- 评分能力仍为规则占位，缺少模型评委与证据链解释
+- 缺少异步任务队列与重试治理（当前为同步执行）
 - 缺少评估结果与版本/发布策略联动（门禁）
 
 ### 5.4 模块5（代码自动生成）关键缺口
 
-- 缺少分语言产物：当前仅返回单段 Java 风格文本，未提供 Python 客户端模板
+- 分语言产物仍属模板级：虽已支持 Java/Python，但缺少 SDK 级工程化打包
 - 缺少 Schema 到对象映射：仍以注释和 `Object` 占位为主，未生成强类型 DTO/校验器
 - 缺少发布绑定：代码生成与发布单/环境生效版本未建立一一对应关系
-- 缺少工程化产物：未产出可直接集成的 SDK 包、依赖声明与最小可运行示例
-- 缺少版本可追溯元数据：下载文件名固定，未携带 PSU/版本号/语言等关键信息
+- 缺少工程化产物：未产出可直接集成的 SDK 包、依赖声明与完整最小可运行工程
+- 版本追溯元数据仍不充分：虽已规范文件名，但尚未与发布单强绑定
 
 ## 6. 快速开始
 
@@ -222,6 +333,10 @@ cd workspace/frontend
 npm install
 npm run dev
 ```
+
+前端 API 前缀切换（模块G）：
+- 默认：`/api`（兼容旧路径）
+- 启用新前缀：设置环境变量 `VITE_API_USE_V1=true` 后走 `/api/v1`
 
 ### 6.3 默认地址
 

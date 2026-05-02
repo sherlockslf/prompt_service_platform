@@ -15,6 +15,8 @@ public class TestRunResponse {
     private Integer totalCases;
     private Integer successCases;
     private Integer failedCases;
+    private String status;
+    private String exceptionReason;
     private List<Item> items = new ArrayList<>();
 
     @Data
@@ -23,9 +25,11 @@ public class TestRunResponse {
         private String name;
         private Map<String, Object> input;
         private String renderedPrompt;
-        private String modelOutput;
+        private String actualOutput;
         private boolean success;
+        private String status;
         private String error;
+        private String exceptionReason;
         private Integer latencyMs;
     }
 }

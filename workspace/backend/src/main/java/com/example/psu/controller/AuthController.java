@@ -18,7 +18,7 @@ import jakarta.validation.Valid;
  * 认证控制器
  */
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping({"/api/auth", "/api/v1/auth"})
 public class AuthController {
     
     @Autowired
@@ -44,4 +44,5 @@ public class AuthController {
         return ResponseEntity.ok(response);
     }
 }
+
 

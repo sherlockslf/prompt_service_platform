@@ -39,7 +39,7 @@ public class ReleaseController {
         this.releaseService = releaseService;
     }
 
-    @GetMapping("/api/releases")
+    @GetMapping({"/api/releases", "/api/v1/releases"})
     public ResponseEntity<Page<PromptRelease>> getReleases(
         @RequestParam(required = false) Long psuId,
         @RequestParam(required = false) String environment,
@@ -50,27 +50,27 @@ public class ReleaseController {
         return ResponseEntity.ok(releaseService.getReleases(psuId, environment, pageable));
     }
 
-    @GetMapping("/api/releases/{releaseId}")
+    @GetMapping({"/api/releases/{releaseId}", "/api/v1/releases/{releaseId}"})
     public ResponseEntity<PromptRelease> getRelease(@PathVariable Long releaseId) {
         return ResponseEntity.ok(releaseService.getRelease(releaseId));
     }
 
-    @PostMapping("/api/releases")
+    @PostMapping({"/api/releases", "/api/v1/releases"})
     public ResponseEntity<PromptRelease> createRelease(@RequestBody CreateReleaseRequest request) {
         return ResponseEntity.ok(releaseService.createRelease(request, DEFAULT_OPERATOR_ID));
     }
 
-    @PostMapping("/api/releases/{releaseId}/submit")
+    @PostMapping({"/api/releases/{releaseId}/submit", "/api/v1/releases/{releaseId}/submit"})
     public ResponseEntity<PromptRelease> submit(@PathVariable Long releaseId) {
         return ResponseEntity.ok(releaseService.submit(releaseId, DEFAULT_OPERATOR_ID));
     }
 
-    @PostMapping("/api/releases/{releaseId}/approve")
+    @PostMapping({"/api/releases/{releaseId}/approve", "/api/v1/releases/{releaseId}/approve"})
     public ResponseEntity<PromptRelease> approve(@PathVariable Long releaseId) {
         return ResponseEntity.ok(releaseService.approve(releaseId, DEFAULT_OPERATOR_ID));
     }
 
-    @PostMapping("/api/releases/{releaseId}/reject")
+    @PostMapping({"/api/releases/{releaseId}/reject", "/api/v1/releases/{releaseId}/reject"})
     public ResponseEntity<PromptRelease> reject(
         @PathVariable Long releaseId,
         @RequestBody(required = false) ReviewReleaseRequest request
@@ -78,12 +78,12 @@ public class ReleaseController {
         return ResponseEntity.ok(releaseService.reject(releaseId, request, DEFAULT_OPERATOR_ID));
     }
 
-    @PostMapping("/api/releases/{releaseId}/execute")
+    @PostMapping({"/api/releases/{releaseId}/execute", "/api/v1/releases/{releaseId}/execute"})
     public ResponseEntity<PromptRelease> execute(@PathVariable Long releaseId) {
         return ResponseEntity.ok(releaseService.execute(releaseId, DEFAULT_OPERATOR_ID));
     }
 
-    @PostMapping("/api/releases/{releaseId}/rollback")
+    @PostMapping({"/api/releases/{releaseId}/rollback", "/api/v1/releases/{releaseId}/rollback"})
     public ResponseEntity<PromptRelease> rollback(
         @PathVariable Long releaseId,
         @RequestBody RollbackReleaseRequest request
@@ -91,12 +91,12 @@ public class ReleaseController {
         return ResponseEntity.ok(releaseService.rollback(releaseId, request, DEFAULT_OPERATOR_ID));
     }
 
-    @GetMapping("/api/releases/{releaseId}/rules")
+    @GetMapping({"/api/releases/{releaseId}/rules", "/api/v1/releases/{releaseId}/rules"})
     public ResponseEntity<List<PromptReleaseRule>> getRules(@PathVariable Long releaseId) {
         return ResponseEntity.ok(releaseService.getRules(releaseId));
     }
 
-    @PostMapping("/api/releases/{releaseId}/rules")
+    @PostMapping({"/api/releases/{releaseId}/rules", "/api/v1/releases/{releaseId}/rules"})
     public ResponseEntity<PromptReleaseRule> addRule(
         @PathVariable Long releaseId,
         @RequestBody ReleaseRuleRequest request
@@ -104,7 +104,7 @@ public class ReleaseController {
         return ResponseEntity.ok(releaseService.addRule(releaseId, request));
     }
 
-    @PutMapping("/api/releases/{releaseId}/rules/{ruleId}")
+    @PutMapping({"/api/releases/{releaseId}/rules/{ruleId}", "/api/v1/releases/{releaseId}/rules/{ruleId}"})
     public ResponseEntity<PromptReleaseRule> updateRule(
         @PathVariable Long releaseId,
         @PathVariable Long ruleId,
@@ -113,13 +113,13 @@ public class ReleaseController {
         return ResponseEntity.ok(releaseService.updateRule(releaseId, ruleId, request));
     }
 
-    @DeleteMapping("/api/releases/{releaseId}/rules/{ruleId}")
+    @DeleteMapping({"/api/releases/{releaseId}/rules/{ruleId}", "/api/v1/releases/{releaseId}/rules/{ruleId}"})
     public ResponseEntity<Void> deleteRule(@PathVariable Long releaseId, @PathVariable Long ruleId) {
         releaseService.deleteRule(releaseId, ruleId);
         return ResponseEntity.ok().build();
     }
 
-    @PostMapping("/api/prompt-service/resolve")
+    @PostMapping({"/api/prompt-service/resolve", "/api/v1/prompt-service/resolve"})
     public ResponseEntity<ResolvePromptResponse> resolve(@RequestBody ResolvePromptRequest request) {
         return ResponseEntity.ok(releaseService.resolve(request));
     }

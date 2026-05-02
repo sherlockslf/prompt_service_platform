@@ -1,6 +1,7 @@
 package com.example.psu.service;
 
 import com.example.psu.dto.request.CreatePromptRequest;
+import com.example.psu.dto.response.PromptTestResponse;
 import com.example.psu.entity.PromptFragment;
 import com.example.psu.entity.PsuUnit;
 import com.example.psu.enums.PsuStatus;
@@ -11,13 +12,20 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
  * Prompt管理服务
+ *
+ * @author SLF
+ * @date 2026-04-29
+ * @description 提供Prompt片段生命周期管理及统一测试能力
  */
 @Service
 public class PromptService {
@@ -180,18 +188,21 @@ public class PromptService {
      * @param inputParams 输入参数
      * @return 测试结果
      */
-    public String testPrompt(Long psuId, Map<String, Object> inputParams) {
+    public PromptTestResponse testPrompt(Long psuId, Map<String, Object> inputParams) {
         RequestValidationUtils.requireNonNull(psuId, "psuId");
         RequestValidationUtils.requireNonNull(inputParams, "inputParams");
+        long begin = System.currentTimeMillis();
         // 获取所有Prompt片段
         List<PromptFragment> fragments = getPromptFragments(psuId);
-        
-        // 组装完整Prompt
-        String fullPrompt = assembleFullPrompt(fragments, inputParams);
-        
-        // 这里应该调用大模型API进行测试
-        // 为了演示，我们返回组装后的Prompt
-        return "Test result for prompt: " + fullPrompt;
+
+        // 组装完整Prompt并收集缺失变量，统一返回结构化数据
+        RenderResult renderResult = assembleFullPromptWithMissingVars(fragments, inputParams);
+        PromptTestResponse response = new PromptTestResponse();
+        response.setRenderedPrompt(renderResult.renderedPrompt());
+        response.setMissingVars(renderResult.missingVars().stream().toList());
+        response.setLatencyMs((int) (System.currentTimeMillis() - begin));
+        response.setTraceId(UUID.randomUUID().toString());
+        return response;
     }
     
     /**
@@ -203,25 +214,8 @@ public class PromptService {
     public String assembleFullPrompt(List<PromptFragment> fragments, Map<String, Object> variables) {
         RequestValidationUtils.requireNonNull(fragments, "fragments");
         RequestValidationUtils.requireNonNull(variables, "variables");
-        StringBuilder sb = new StringBuilder();
-        
-        // 按排序顺序组装
-        List<PromptFragment> orderedFragments = fragments.stream()
-                .sorted((a, b) -> Integer.compare(a.getSortOrder(), b.getSortOrder()))
-                .collect(Collectors.toList());
-        
-        for (PromptFragment fragment : orderedFragments) {
-            String content = fragment.getContent();
-            
-            // 替换变量（简单实现）
-            for (Map.Entry<String, Object> entry : variables.entrySet()) {
-                content = content.replace("{{" + entry.getKey() + "}}", entry.getValue().toString());
-            }
-            
-            sb.append(content).append("\n");
-        }
-        
-        return sb.toString().trim();
+        // 保持原有方法签名，对外返回渲染后的Prompt文本
+        return assembleFullPromptWithMissingVars(fragments, variables).renderedPrompt();
     }
 
     private void assertDraftEditable(PsuUnit psu) {
@@ -229,6 +223,79 @@ public class PromptService {
         if (psu.getStatus() != PsuStatus.DRAFT) {
             throw new RuntimeException("当前PSU为只读状态，仅草稿可编辑");
         }
+    }
+
+    private RenderResult assembleFullPromptWithMissingVars(List<PromptFragment> fragments, Map<String, Object> variables) {
+        // 按排序顺序组装，并在替换过程中收集缺失变量
+        StringBuilder sb = new StringBuilder();
+        Set<String> missingVars = new LinkedHashSet<>();
+        List<PromptFragment> orderedFragments = fragments.stream()
+            .sorted((a, b) -> Integer.compare(a.getSortOrder(), b.getSortOrder()))
+            .collect(Collectors.toList());
+
+        for (PromptFragment fragment : orderedFragments) {
+            String renderedContent = renderFragment(fragment.getContent(), variables, missingVars);
+            sb.append(renderedContent).append("\n");
+        }
+        return new RenderResult(sb.toString().trim(), missingVars);
+    }
+
+    private String renderFragment(String template, Map<String, Object> variables, Set<String> missingVars) {
+        // 逐个解析占位符，支持a.b.c路径读取并记录缺失字段
+        if (template == null || template.isBlank()) {
+            return "";
+        }
+        StringBuilder rendered = new StringBuilder();
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("\\{\\{\\s*([^}]+?)\\s*\\}\\}").matcher(template);
+        int lastIndex = 0;
+        while (matcher.find()) {
+            rendered.append(template, lastIndex, matcher.start());
+            String path = matcher.group(1).trim();
+            Object value = getValueByPath(variables, path);
+            if (value == null) {
+                missingVars.add(path);
+            } else if (value instanceof Map<?, ?> || value instanceof List<?>) {
+                rendered.append(String.valueOf(value));
+            } else {
+                rendered.append(value);
+            }
+            lastIndex = matcher.end();
+        }
+        rendered.append(template.substring(lastIndex));
+        return rendered.toString();
+    }
+
+    private Object getValueByPath(Map<String, Object> source, String rawPath) {
+        // 兼容a.b.c和数组索引路径读取（如items[0].name）
+        if (source == null || rawPath == null || rawPath.isBlank()) {
+            return null;
+        }
+        String normalized = rawPath.replace("[*]", ".0").replaceAll("\\[(\\d+)]", ".$1");
+        String[] parts = normalized.split("\\.");
+        Object current = source;
+        for (String part : parts) {
+            if (part == null || part.isBlank()) {
+                continue;
+            }
+            if (current instanceof Map<?, ?> map) {
+                current = map.get(part);
+                continue;
+            }
+            if (current instanceof List<?> list) {
+                try {
+                    int index = Integer.parseInt(part);
+                    current = index >= 0 && index < list.size() ? list.get(index) : null;
+                } catch (NumberFormatException e) {
+                    return null;
+                }
+                continue;
+            }
+            return null;
+        }
+        return current;
+    }
+
+    private record RenderResult(String renderedPrompt, Set<String> missingVars) {
     }
 }
 

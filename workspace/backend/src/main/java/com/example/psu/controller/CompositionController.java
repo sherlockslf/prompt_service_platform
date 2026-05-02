@@ -27,7 +27,7 @@ import java.util.Optional;
  * 编排控制器
  */
 @RestController
-@RequestMapping("/api/compositions")
+@RequestMapping({"/api/compositions", "/api/v1/compositions"})
 public class CompositionController {
 
     private static final Long DEFAULT_OPERATOR_ID = 0L;
@@ -128,4 +128,5 @@ public class CompositionController {
         return response;
     }
 }
+
 

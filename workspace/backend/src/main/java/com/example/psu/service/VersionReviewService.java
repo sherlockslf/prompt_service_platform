@@ -19,7 +19,7 @@ public interface VersionReviewService {
 
     VersionReview reviewVersion(Long reviewId, ReviewRequest request, Long reviewerId);
 
-    String getCode(Long psuId);
+    String getCode(Long psuId, String language);
 
     VersionReview registerGitCommit(Long reviewId, String gitCommitHash, Long operatorId);
 

@@ -4,6 +4,7 @@ import com.example.psu.dto.request.CompositionRenderRequest;
 import com.example.psu.dto.request.TestRunRequest;
 import com.example.psu.dto.response.CompositionRenderResponse;
 import com.example.psu.dto.response.TestRunResponse;
+import com.example.psu.dto.response.TestRunSummaryResponse;
 import com.example.psu.entity.PromptComposition;
 import com.example.psu.entity.TestDataset;
 import com.example.psu.entity.TestRun;
@@ -28,9 +29,17 @@ import java.util.Objects;
 
 /**
  * 测试运行服务
+ *
+ * @author SLF
+ * @date 2026-04-29
+ * @description 提供测试集运行、详情查询与运行历史查询能力
  */
 @Service
 public class TestRunService {
+    private static final String RUNNING_STATUS = "RUNNING";
+    private static final String SUCCESS_STATUS = "SUCCESS";
+    private static final String FAILED_STATUS = "FAILED";
+    private static final String PARTIAL_SUCCESS_STATUS = "PARTIAL_SUCCESS";
 
     @Autowired
     private PsuRepository psuRepository;
@@ -77,6 +86,8 @@ public class TestRunService {
         run.setPsuId(safePsuId);
         run.setDatasetId(safeDatasetId);
         run.setCompositionId(composition.getId());
+        run.setStatus(RUNNING_STATUS);
+        run.setExceptionReason(null);
         run.setCreatedBy(userId);
         run = testRunRepository.save(run);
 
@@ -84,22 +95,41 @@ public class TestRunService {
         int failed = 0;
         List<TestRunResponse.Item> items = new ArrayList<>();
         int index = 1;
+        String firstExceptionReason = null;
         for (Map<String, Object> testCase : cases) {
             // 逐条用例渲染并记录详细运行结果。
             String caseId = String.valueOf(testCase.getOrDefault("caseId", "case-" + index));
             String name = String.valueOf(testCase.getOrDefault("name", caseId));
             Map<String, Object> input = extractCaseInput(testCase);
 
-            CompositionRenderRequest renderRequest = new CompositionRenderRequest();
-            renderRequest.setCompositionId(composition.getId());
-            renderRequest.setInput(input);
+            String renderedPrompt = null;
+            String actualOutput = null;
+            String error = null;
+            String exceptionReason = null;
+            String itemStatus;
+            boolean itemSuccess;
+            int latency;
             long begin = System.currentTimeMillis();
-            CompositionRenderResponse renderResponse = compositionService.render(safePsuId, renderRequest);
-            int latency = (int) (System.currentTimeMillis() - begin);
-
-            boolean itemSuccess = renderResponse.getMissingVars() == null || renderResponse.getMissingVars().isEmpty();
-            String error = itemSuccess ? null : "缺失变量: " + String.join(",", renderResponse.getMissingVars());
-            String modelOutput = itemSuccess ? "MOCK_OUTPUT: " + renderResponse.getRenderedPrompt() : null;
+            try {
+                // 对单条用例做异常隔离，确保单条失败不阻断整批测试。
+                CompositionRenderRequest renderRequest = new CompositionRenderRequest();
+                renderRequest.setCompositionId(composition.getId());
+                renderRequest.setInput(input);
+                CompositionRenderResponse renderResponse = compositionService.render(safePsuId, renderRequest);
+                latency = (int) (System.currentTimeMillis() - begin);
+                renderedPrompt = renderResponse.getRenderedPrompt();
+                itemSuccess = renderResponse.getMissingVars() == null || renderResponse.getMissingVars().isEmpty();
+                error = itemSuccess ? null : "缺失变量: " + String.join(",", renderResponse.getMissingVars());
+                actualOutput = itemSuccess ? "MOCK_OUTPUT: " + renderedPrompt : null;
+                itemStatus = itemSuccess ? SUCCESS_STATUS : FAILED_STATUS;
+                exceptionReason = error;
+            } catch (Exception ex) {
+                latency = (int) (System.currentTimeMillis() - begin);
+                itemSuccess = false;
+                itemStatus = FAILED_STATUS;
+                error = "执行异常";
+                exceptionReason = safeErrorMessage(ex);
+            }
 
             TestRunItem runItem = new TestRunItem();
             runItem.setRunId(run.getId());
@@ -107,10 +137,12 @@ public class TestRunService {
             // 记录用例名称，避免数据库非空字段缺失导致插入失败。
             runItem.setCaseName(name);
             runItem.setInputJson(writeJson(input));
-            runItem.setRenderedPrompt(renderResponse.getRenderedPrompt());
-            runItem.setModelOutput(modelOutput);
+            runItem.setRenderedPrompt(renderedPrompt);
+            runItem.setActualOutput(actualOutput);
             runItem.setSuccess(itemSuccess);
+            runItem.setStatus(itemStatus);
             runItem.setErrorMessage(error);
+            runItem.setExceptionReason(exceptionReason);
             runItem.setLatencyMs(latency);
             testRunItemRepository.save(runItem);
 
@@ -118,16 +150,22 @@ public class TestRunService {
                 success++;
             } else {
                 failed++;
+                if (firstExceptionReason == null || firstExceptionReason.isBlank()) {
+                    // 主记录保留首个异常原因，便于运行历史快速定位问题根因。
+                    firstExceptionReason = exceptionReason;
+                }
             }
 
             TestRunResponse.Item responseItem = new TestRunResponse.Item();
             responseItem.setCaseId(caseId);
             responseItem.setName(name);
             responseItem.setInput(input);
-            responseItem.setRenderedPrompt(renderResponse.getRenderedPrompt());
-            responseItem.setModelOutput(modelOutput);
+            responseItem.setRenderedPrompt(renderedPrompt);
+            responseItem.setActualOutput(actualOutput);
             responseItem.setSuccess(itemSuccess);
+            responseItem.setStatus(itemStatus);
             responseItem.setError(error);
+            responseItem.setExceptionReason(exceptionReason);
             responseItem.setLatencyMs(latency);
             items.add(responseItem);
             index++;
@@ -136,6 +174,8 @@ public class TestRunService {
         run.setTotalCases(cases.size());
         run.setSuccessCases(success);
         run.setFailedCases(failed);
+        run.setStatus(calculateRunStatus(cases.size(), failed));
+        run.setExceptionReason(firstExceptionReason);
         testRunRepository.save(run);
 
         TestRunResponse response = new TestRunResponse();
@@ -143,6 +183,8 @@ public class TestRunService {
         response.setTotalCases(cases.size());
         response.setSuccessCases(success);
         response.setFailedCases(failed);
+        response.setStatus(run.getStatus());
+        response.setExceptionReason(run.getExceptionReason());
         response.setItems(items);
         return response;
     }
@@ -163,6 +205,8 @@ public class TestRunService {
         response.setTotalCases(run.getTotalCases());
         response.setSuccessCases(run.getSuccessCases());
         response.setFailedCases(run.getFailedCases());
+        response.setStatus(run.getStatus());
+        response.setExceptionReason(run.getExceptionReason());
 
         List<TestRunResponse.Item> items = new ArrayList<>();
         for (TestRunItem runItem : runItems) {
@@ -174,14 +218,48 @@ public class TestRunService {
                 : runItem.getCaseName());
             item.setInput(readMap(runItem.getInputJson()));
             item.setRenderedPrompt(runItem.getRenderedPrompt());
-            item.setModelOutput(runItem.getModelOutput());
+            item.setActualOutput(runItem.getActualOutput());
             item.setSuccess(runItem.isSuccess());
+            item.setStatus(runItem.getStatus());
             item.setError(runItem.getErrorMessage());
+            item.setExceptionReason(runItem.getExceptionReason());
             item.setLatencyMs(runItem.getLatencyMs());
             items.add(item);
         }
         response.setItems(items);
         return response;
+    }
+
+    /**
+     * 查询测试运行历史（按PSU可选按数据集筛选）
+     */
+    public List<TestRunSummaryResponse> listRuns(Long psuId, Long datasetId) {
+        RequestValidationUtils.requireNonNull(psuId, "psuId");
+        Long safePsuId = Objects.requireNonNull(psuId);
+        // 先校验PSU存在，避免前端误传时返回空列表造成误判。
+        psuRepository.findById(safePsuId).orElseThrow(() -> new RuntimeException("PSU not found: " + safePsuId));
+        List<TestRun> runs;
+        if (datasetId == null) {
+            runs = testRunRepository.findTop50ByPsuIdOrderByCreatedAtDesc(safePsuId);
+        } else {
+            runs = testRunRepository.findTop50ByPsuIdAndDatasetIdOrderByCreatedAtDesc(safePsuId, datasetId);
+        }
+        List<TestRunSummaryResponse> responses = new ArrayList<>();
+        for (TestRun run : runs) {
+            TestRunSummaryResponse item = new TestRunSummaryResponse();
+            item.setRunId(run.getId());
+            item.setPsuId(run.getPsuId());
+            item.setDatasetId(run.getDatasetId());
+            item.setCompositionId(run.getCompositionId());
+            item.setTotalCases(run.getTotalCases());
+            item.setSuccessCases(run.getSuccessCases());
+            item.setFailedCases(run.getFailedCases());
+            item.setStatus(run.getStatus());
+            item.setExceptionReason(run.getExceptionReason());
+            item.setCreatedAt(run.getCreatedAt());
+            responses.add(item);
+        }
+        return responses;
     }
 
     private PromptComposition resolveComposition(Long psuId, Long compositionId) {
@@ -242,6 +320,26 @@ public class TestRunService {
         copy.remove("name");
         copy.remove("expected");
         return copy;
+    }
+
+    private String calculateRunStatus(int totalCases, int failedCases) {
+        if (totalCases <= 0) {
+            return SUCCESS_STATUS;
+        }
+        if (failedCases <= 0) {
+            return SUCCESS_STATUS;
+        }
+        if (failedCases >= totalCases) {
+            return FAILED_STATUS;
+        }
+        return PARTIAL_SUCCESS_STATUS;
+    }
+
+    private String safeErrorMessage(Exception ex) {
+        if (ex == null || ex.getMessage() == null || ex.getMessage().isBlank()) {
+            return "未知异常";
+        }
+        return ex.getMessage();
     }
 
     private String writeJson(Map<String, Object> value) {

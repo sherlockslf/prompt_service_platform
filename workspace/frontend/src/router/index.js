@@ -4,6 +4,7 @@ const Login = () => import('../views/auth/Login.vue')
 const AdminDashboard = () => import('../views/admin/Dashboard.vue')
 const DeveloperDashboard = () => import('../views/developer/Dashboard.vue')
 const ReleaseCenter = () => import('../views/developer/ReleaseCenter.vue')
+const EvaluationCenter = () => import('../views/developer/EvaluationCenter.vue')
 const BusinessDashboard = () => import('../views/business/Dashboard.vue')
 const PromptComposer = () => import('../views/business/PromptComposer.vue')
 const CompositionReview = () => import('../views/developer/CompositionReview.vue')
@@ -28,6 +29,11 @@ const routes = [
     path: '/developer/releases',
     name: 'ReleaseCenter',
     component: ReleaseCenter
+  },
+  {
+    path: '/developer/evaluations',
+    name: 'EvaluationCenter',
+    component: EvaluationCenter
   },
   {
     path: '/business',

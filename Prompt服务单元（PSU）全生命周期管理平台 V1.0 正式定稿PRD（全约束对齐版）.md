@@ -1,8 +1,10 @@
-# Prompt服务单元（PSU）全生命周期管理平台 V1.0 正式定稿PRD（全约束对齐版）
+# Prompt服务单元（PSU）全生命周期管理平台 V1.0 正式定稿PRD（全约束对齐版）（版本时间：2026-04-29）
 
 **文档密级**：内部研发涉密 · 禁止对外同步
 
-**文档版本**：V1.0 最终定稿版
+**文档版本**：V2.1 对齐更新版
+
+**版本时间**：2026年04月29日（本次工作区回顾补充）
 
 **生效日期**：2026年04月10日
 
@@ -38,6 +40,16 @@
 |V0.2|2026.04.10|第一轮刚性删减：剔除Python、删减运维模块、关停流水线、取消一键部署、收拢RBAC权限|产研同步对齐|
 |V1.0 终版|2026.04.10|第二轮权限强控定稿：锁定JSON Schema研发专属编辑权，业务侧仅只读编排；同步固化半自动化发布、代码入库全流程，全约束闭环定稿|产研终审签字|
 |V1.1 对齐版|2026.04.15|第三轮设计稿对齐：补充完整技术栈明细（Vue3.4/Pinia/Element Plus/Spring Boot 3.2/MySQL 8.0/Redis/JWT）、对齐数据库表结构（ai_prompt_*前缀、新增test_datasets）、补充完整API接口设计（9大模块）、补充前端架构设计、补充安全设计（JWT/BCrypt/AES-256/LLM集成）、修正Prompt定版逻辑（业务角色finalize）|产研终审签字|
+|V1.2 时间标记版|2026.04.29|补充文档标题与版本时间标记，便于版本追溯与跨文档对齐|研发对齐更新|
+|V1.3 开发同步版|2026.04.29|同步近期落地能力：Prompt测试统一后端接口、测试运行历史查询、审核预览回传参数集快照、Git提交hash登记校验与页面入口|研发对齐更新|
+|V1.4 测试链路增强版|2026.04.29|测试运行补充状态与异常原因字段（run/item两层），实际输出语义统一，字段校验策略明确为“DB仅存取、Java后端校验”|研发对齐更新|
+|V1.5 代码生成增强版|2026.04.29|代码生成支持language参数（java/python）与双模板分流，前端支持语言切换、元数据展示和规范化下载命名|研发对齐更新|
+|V1.6 Schema历史视图版|2026.04.29|Schema版本历史接口返回字段固定（modifiedBy/updatedAt/changeLog）并落地前端历史抽屉展示|研发对齐更新|
+|V1.7 API版本迁移版|2026.04.29|核心接口支持`/api`与`/api/v1`双路由兼容，前端增加API前缀切换开关，默认保持旧路径回退能力|研发对齐更新|
+|V1.8 评估MVP版|2026.04.29|新增评估任务/明细/报告三张表，补齐评估中心接口与前端页面，形成创建-执行-查询-报告最小闭环|研发对齐更新|
+|V1.9 评估体验补齐版|2026.04.29|支持从测试集列表一键发起评估任务，自动带入PSU/测试集参数并快速创建评估任务|研发对齐更新|
+|V2.0 评估任务管理版|2026.04.29|评估中心补齐任务历史管理能力：新增任务历史查询接口（支持按测试集筛选），前端支持历史任务列表、详情回看、报告回看|研发对齐更新|
+|V2.1 图谱补充版|2026.04.29|补充评估中心新模块流程图、关键时序图与功能拓扑关系图，强化研发与评审可视化对齐|研发对齐更新|
 ## 二、核心名词释义（统一口径，避免研发歧义）
 
 |名词缩写|完整全称|现场落地释义|
@@ -162,7 +174,7 @@
    - `generateParameterValidationCode`：基于JSON Schema生成参数校验代码
    - `generateParameterAssemblyCode`：基于输入/输出Schema生成参数拼装代码
    - `generatePromptAssemblyCode`：基于Prompt片段生成Prompt组装代码
-   - `generateCompleteBusinessCode`：组合生成完整业务代码
+   - `generateCompleteBusinessCode`：组合生成完整业务代码（支持 `language=java/python`）
 
 ### 8.3 业务配置空间（纯调优阵地，无结构操作）
 
@@ -171,6 +183,7 @@
 业务侧可查看全量Schema字段台账，一键引用合规变量拼接话术，实时在线调试大模型返回效果，全程不触碰底层技术结构，零代码上手。
 - Prompt测试接口：`POST /api/prompts/{psuId}/test`，传入测试参数返回大模型效果
 - 片段更新：`PUT /api/prompts/{fragmentId}`，仅editable=true的片段可编辑
+- 测试返回结构：`renderedPrompt`、`missingVars`、`latencyMs`、`traceId`
 
 **8.3.2 标准化测试用例批量维护**
 
@@ -187,6 +200,7 @@
 - 提交审核：`POST /api/versions/{psuId}/submit`（业务角色）
 - 审核状态：DRAFT（草稿）/ CANDIDATE（发布候选）/ FORMAL（正式版）/ ARCHIVED（归档）
 - 版本审核列表：`GET /api/versions?psuId={psuId}`
+- 审核预览返回：`renderedPrompt`、`missingVars`、`paramSetSnapshot`
 
 ### 8.4 版本审核 & 半自动化发布闭环（无流水线、无一键部署）
 
@@ -196,12 +210,14 @@
 4. 台账入库：代码生成后强制登记Git提交记录（gitCommitHash字段）、责任人、时间戳，资产永久归档；
 5. 自主上线：研发拿到合规代码后，自行完成业务服务打包、发布、运维，平台不介入、不接管、不自动化执行；
 6. 数据库表：`ai_prompt_version_reviews`（psu_id + version_no联合唯一约束）
-7. 代码生成接口：`GET /api/versions/{psuId}/code`，返回生成的完整业务代码
+7. 代码生成接口：`GET /api/versions/{psuId}/code?language=java|python`，返回对应语言代码
 8. 审核接口：`POST /api/versions/{reviewId}/review`（研发角色），传入approved和rejectionReason
 9. 版本对比接口：`GET /api/versions/{psuId}/compare?fromVersionNo=&toVersionNo=`，返回快照差异统计
 10. 版本回滚接口：`POST /api/versions/{psuId}/rollback`，按目标版本回滚并生成新的正式版本记录
 
 ## 九、核心API接口设计（RESTful规范，/api/v1/版本控制）
+
+> 兼容说明：当前阶段核心接口同时支持 `/api/**` 与 `/api/v1/**`，前端默认走 `/api/**`，可通过开关切换到 `/api/v1/**`。
 
 ### 9.1 认证模块 `/api/auth/**`
 - `POST /api/auth/login` - 用户登录（返回JWT Token）
@@ -216,7 +232,7 @@
 ### 9.3 Schema管理 `/api/schemas/**`
 - `GET /api/schemas/{psuId}` - 获取Schema（研发可编辑，业务只读）
 - `PUT /api/schemas/{psuId}` - 更新Schema（仅研发，传入schemaContent和changeLog）
-- `GET /api/schemas/{psuId}/versions` - 获取Schema版本列表（兼容接口，覆盖写模式下仅返回当前记录）
+- `GET /api/schemas/{psuId}/versions` - 获取Schema版本列表（返回字段固定：version/changeLog/modifiedBy/updatedAt）
 
 ### 9.3.1 参数集管理 `/api/param-sets/**`
 - `GET /api/param-sets/{psuId}` - 获取参数集（按PSU，覆盖写当前值）
@@ -233,9 +249,10 @@
 - `POST /api/versions/{psuId}/submit` - 提交版本审核（业务角色）
 - `POST /api/versions/{reviewId}/review` - 审核版本（仅研发，传入approved和rejectionReason）
 - `GET /api/versions/{reviewId}/preview` - 审核预览（按参数集渲染并返回缺失变量）
-- `GET /api/versions/{psuId}/code` - 获取生成的业务代码
+- `GET /api/versions/{psuId}/code?language=java|python` - 获取生成的业务代码
 - `GET /api/versions/{psuId}/compare?fromVersionNo=&toVersionNo=` - 对比两个版本快照差异
 - `POST /api/versions/{psuId}/rollback` - 回滚到历史版本内容并固化新正式版本
+- `POST /api/versions/{reviewId}/git-commit` - 登记Git提交哈希（审核通过后）
 
 ### 9.6 用户管理 `/api/users/**`（仅管理员）
 - `GET /api/users` - 获取用户列表（@PreAuthorize("hasRole('ADMIN')")）
@@ -257,6 +274,102 @@
 - `POST /api/test-datasets?psuId={psuId}` - 创建测试数据集（传入name、dataContent、description）
 - `PUT /api/test-datasets/{id}` - 更新测试数据集
 - `DELETE /api/test-datasets/{id}` - 删除测试数据集
+
+### 9.10 测试运行 `/api/test-runs/**`
+- `POST /api/test-runs?psuId={psuId}&datasetId={datasetId}` - 执行测试集运行（返回run汇总与item明细）
+- `GET /api/test-runs/{runId}` - 获取单次运行详情
+- `GET /api/test-runs?psuId={psuId}&datasetId={datasetId}` - 获取最近测试运行历史（datasetId可选）
+- 运行状态字段：`status`（RUNNING/SUCCESS/FAILED/PARTIAL_SUCCESS）
+- 异常原因字段：`exceptionReason`（run与item两层均保留）
+- 输出语义：仅保留“实际输出”字段（历史存储字段名兼容为 `model_output`）
+
+### 9.11 评估中心 `/api/evaluations/**`
+- `POST /api/evaluations/tasks` - 创建评估任务（传入psuId、datasetId、dimensions）
+- `POST /api/evaluations/tasks/{id}/run` - 执行评估任务（规则化评分占位）
+- `GET /api/evaluations/tasks?psuId={psuId}&datasetId={datasetId}` - 查询任务历史（datasetId可选）
+- `GET /api/evaluations/tasks/{id}` - 查询任务详情（含明细）
+- `GET /api/evaluations/reports/{id}` - 查询评估报告（含问题样例）
+- 路由兼容：上述接口同时兼容 `/api/v1/evaluations/**`
+- 前端入口：支持从测试集管理列表一键跳转评估中心并自动预填参数；支持评估中心内历史任务筛选与回看
+
+### 9.11.1 评估中心可视化设计（新增）
+
+**A. 模块流程图（任务创建-执行-回看）**
+
+```mermaid
+flowchart TD
+    U1[选择PSU与测试集] --> U2[创建评估任务]
+    U2 --> BE1[写任务主记录]
+    BE1 --> DB1[(ai_prompt_evaluation_tasks)]
+    U2 --> U3[执行评估任务]
+    U3 --> BE2[逐条渲染与规则评分]
+    BE2 --> DB2[(ai_prompt_evaluation_item_results)]
+    BE2 --> BE3[汇总状态与均分]
+    BE3 --> DB1
+    BE3 --> DB3[(ai_prompt_evaluation_reports)]
+    U3 --> U4[查询任务历史]
+    U4 --> U5[回看详情与报告]
+
+    classDef user fill:#e0f2fe,color:#0c4a6e,stroke:#0284c7;
+    classDef service fill:#dcfce7,color:#166534,stroke:#16a34a;
+    classDef data fill:#fff7ed,color:#9a3412,stroke:#f97316;
+    class U1,U2,U3,U4,U5 user;
+    class BE1,BE2,BE3 service;
+    class DB1,DB2,DB3 data;
+```
+
+**B. 核心时序图（前端-后端-数据层）**
+
+```mermaid
+sequenceDiagram
+    participant FE as EvaluationCenter
+    participant C as EvaluationController
+    participant S as EvaluationService
+    participant R as CompositionService
+    participant DB as MySQL
+
+    FE->>C: POST /evaluations/tasks
+    C->>S: createTask(psuId,datasetId)
+    S->>DB: insert evaluation_tasks
+    DB-->>S: taskId
+    S-->>FE: task summary
+
+    FE->>C: POST /evaluations/tasks/{id}/run
+    C->>S: runTask(taskId)
+    S->>R: render(case input)
+    R-->>S: renderedPrompt/missingVars
+    S->>DB: insert item_results
+    S->>DB: update tasks + upsert reports
+    S-->>FE: task detail/reportId
+
+    FE->>C: GET /evaluations/tasks?psuId=&datasetId=
+    C->>S: listTasks(psuId,datasetId)
+    S->>DB: query top 50 tasks
+    S-->>FE: task list
+```
+
+**C. 功能拓扑关系图（组件与依赖）**
+
+```mermaid
+flowchart LR
+    FEV[Frontend<br/>EvaluationCenter.vue] --> API[evaluationApi]
+    API --> CTR[EvaluationController]
+    CTR --> SRV[EvaluationService]
+    SRV --> COM[CompositionService]
+    SRV --> RT[EvaluationTaskRepository]
+    SRV --> RI[EvaluationItemResultRepository]
+    SRV --> RR[EvaluationReportRepository]
+    RT --> TBL1[(evaluation_tasks)]
+    RI --> TBL2[(evaluation_item_results)]
+    RR --> TBL3[(evaluation_reports)]
+
+    classDef fe fill:#dbeafe,color:#1e3a8a,stroke:#1d4ed8;
+    classDef be fill:#dcfce7,color:#166534,stroke:#16a34a;
+    classDef db fill:#fff7ed,color:#9a3412,stroke:#f97316;
+    class FEV,API fe;
+    class CTR,SRV,COM,RT,RI,RR be;
+    class TBL1,TBL2,TBL3 db;
+```
 
 ## 十、非功能刚性要求（上线必达标，验收硬指标）
 
@@ -320,6 +433,21 @@
 - 字段：psuId、name、dataContent（TEXT，最大10000字符）、description（VARCHAR 500）
 - 索引：idx_test_datasets_psu_id
 
+### 11.10 评估任务表 `ai_prompt_evaluation_tasks`（新增）
+- 主键：id（BIGINT自增）
+- 字段：psuId、datasetId、status、totalCases、processedCases、successCases、failedCases、averageScore、errorMessage、createdBy、startedAt、finishedAt
+- 索引：idx_eval_tasks_psu_id、idx_eval_tasks_dataset_id、idx_eval_tasks_created_at
+
+### 11.11 评估明细表 `ai_prompt_evaluation_item_results`（新增）
+- 主键：id（BIGINT自增）
+- 字段：taskId、caseId、caseName、inputJson、renderedPrompt、actualOutput、status、relevanceScore、completenessScore、formatScore、totalScore、reason
+- 索引：idx_eval_items_task_id、idx_eval_items_case_id、idx_eval_items_created_at
+
+### 11.12 评估报告表 `ai_prompt_evaluation_reports`（新增）
+- 主键：id（BIGINT自增）
+- 字段：taskId（唯一）、overallScore、passRate、summaryJson、createdAt、updatedAt
+- 约束/索引：uk_eval_reports_task_id、idx_eval_reports_created_at
+
 ## 十二、前端架构设计（Vue3 + Element Plus）
 
 ### 12.1 应用结构
@@ -331,6 +459,7 @@ src/
 │   ├── auth/Login.vue    # 登录页面
 │   ├── admin/Dashboard.vue    # 超级管理员仪表盘
 │   ├── developer/Dashboard.vue # 研发工程空间
+│   ├── developer/EvaluationCenter.vue # 评估中心页面
 │   └── business/Dashboard.vue  # 业务配置空间
 ├── stores/user.js         # Pinia用户状态管理
 ├── services/api.js        # Axios统一API封装
@@ -346,6 +475,7 @@ src/
 
 ### 12.3 API服务层
 - 统一Axios实例：baseURL='/api'，timeout=10000ms
+- 版本迁移开关：支持 `VITE_API_USE_V1=true` 切换至 `/api/v1`
 - 请求拦截器：自动添加Bearer Token到Authorization头
 - 响应拦截器：401自动清除token并跳转登录页
 

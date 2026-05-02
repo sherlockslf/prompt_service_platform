@@ -5,16 +5,17 @@ import lombok.Data;
 import java.util.List;
 
 /**
- * 编排渲染响应
+ * Prompt测试响应
  *
  * @author SLF
  * @date 2026-04-29
- * @description 承载编排渲染结果与预览所用参数快照
+ * @description 统一返回Prompt测试结果，便于前端按固定结构展示
  */
 @Data
-public class CompositionRenderResponse {
+public class PromptTestResponse {
     private String renderedPrompt;
     private List<String> missingVars;
-    private List<String> usedVars;
-    private Object paramSetSnapshot;
+    private Integer latencyMs;
+    private String traceId;
 }
+

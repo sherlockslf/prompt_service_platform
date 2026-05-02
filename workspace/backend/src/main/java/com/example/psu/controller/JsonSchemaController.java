@@ -26,9 +26,13 @@ import java.util.Objects;
 
 /**
  * JSON Schema管理控制器
+ *
+ * @author SLF
+ * @date 2026-04-29
+ * @description 提供Schema查询、更新与历史版本接口
  */
 @RestController
-@RequestMapping("/api/schemas")
+@RequestMapping({"/api/schemas", "/api/v1/schemas"})
 public class JsonSchemaController {
 
     private static final Long DEFAULT_OPERATOR_ID = 0L;
@@ -88,6 +92,13 @@ public class JsonSchemaController {
         JsonSchema safeSchema = Objects.requireNonNull(schema);
         JsonSchemaResponse response = new JsonSchemaResponse();
         BeanUtils.copyProperties(safeSchema, response);
+        // 覆盖写模式下仍统一补齐关键字段，便于前端历史抽屉稳定展示。
+        if (response.getUpdatedAt() == null) {
+            response.setUpdatedAt(safeSchema.getCreatedAt());
+        }
+        if (response.getChangeLog() == null) {
+            response.setChangeLog("");
+        }
         
         // 获取修改者名称
         Long modifierId = safeSchema.getModifiedBy() == null ? 0L : safeSchema.getModifiedBy();
@@ -98,5 +109,6 @@ public class JsonSchemaController {
         return response;
     }
 }
+
 
 

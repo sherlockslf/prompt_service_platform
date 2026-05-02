@@ -21,6 +21,9 @@
           <el-menu-item index="6">
             <span>发版中心</span>
           </el-menu-item>
+          <el-menu-item index="7">
+            <span>评估中心</span>
+          </el-menu-item>
         </el-menu>
         <button
           class="sidebar-toggle"
@@ -122,8 +125,41 @@
               <el-button type="primary" @click="saveSchema">保存Schema</el-button>
               <el-button type="primary" plain @click="saveParamSet">保存参数集</el-button>
               <el-button @click="loadSchema">加载最新版本</el-button>
+              <el-button type="info" plain @click="openSchemaHistory">版本历史</el-button>
             </el-form-item>
           </el-form>
+
+          <el-drawer
+            v-model="showSchemaHistoryDrawer"
+            title="Schema版本历史"
+            size="55%"
+            destroy-on-close
+          >
+            <el-table :data="schemaVersions" v-loading="loadingSchemaVersions" style="width: 100%">
+              <el-table-column prop="version" label="版本" width="90" />
+              <el-table-column prop="modifiedBy" label="修改人ID" width="110" />
+              <el-table-column prop="modifierName" label="修改人" width="130">
+                <template #default="{ row }">
+                  {{ row.modifierName || '-' }}
+                </template>
+              </el-table-column>
+              <el-table-column label="更新时间" width="180">
+                <template #default="{ row }">
+                  {{ formatDateTime(row.updatedAt || row.createdAt) }}
+                </template>
+              </el-table-column>
+              <el-table-column prop="changeLog" label="变更日志" min-width="220">
+                <template #default="{ row }">
+                  {{ row.changeLog || '-' }}
+                </template>
+              </el-table-column>
+              <el-table-column label="Schema快照" width="100">
+                <template #default="{ row }">
+                  <el-button size="small" @click="viewSchemaSnapshot(row)">查看</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </el-drawer>
           
           <!-- 测试数据集管理 -->
           <div class="test-dataset-section" v-if="selectedPsuId">
@@ -144,8 +180,9 @@
                   {{ formatDateTime(row.createdAt) }}
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="200">
+              <el-table-column label="操作" width="280">
                 <template #default="{ row }">
+                  <el-button size="small" type="primary" plain @click="startDatasetEvaluation(row)">发起评估</el-button>
                   <el-button size="small" @click="editDataset(row)">编辑</el-button>
                   <el-button size="small" type="danger" @click="deleteDataset(row)">删除</el-button>
                 </template>
@@ -197,7 +234,7 @@
         <!-- 版本审核 -->
         <div v-if="activeMenu === '4'" class="content-section">
           <h2>版本审核</h2>
-          <el-table :data="versionReviews" style="width: 100%;">
+          <el-table :data="versionReviews" :row-class-name="versionReviewRowClassName" style="width: 100%;">
             <el-table-column prop="psuId" label="PSU ID" width="150"></el-table-column>
             <el-table-column label="版本" width="150">
               <template #default="{ row }">
@@ -213,10 +250,17 @@
             </el-table-column>
             <el-table-column prop="submitterId" label="提交者" width="120"></el-table-column>
             <el-table-column prop="submittedAt" label="提交时间" width="180"></el-table-column>
+            <el-table-column prop="gitCommitHash" label="Git提交Hash" width="180">
+              <template #default="{ row }">
+                <span>{{ row.gitCommitHash || '-' }}</span>
+              </template>
+            </el-table-column>
             <el-table-column label="操作" width="320">
               <template #default="{ row }">
+                <el-button size="small" @click="goReviewPreview(row)" :disabled="row.status !== 'CANDIDATE'">预览</el-button>
                 <el-button size="small" @click="approveVersion(row)" :disabled="row.status !== 'CANDIDATE'">通过</el-button>
                 <el-button size="small" type="danger" @click="rejectVersion(row)" :disabled="row.status !== 'CANDIDATE'">拒绝</el-button>
+                <el-button size="small" type="success" @click="registerGitCommit(row)" :disabled="row.status !== 'FORMAL'">登记Git</el-button>
                 <el-button size="small" @click="compareVersion(row)">对比</el-button>
                 <el-button size="small" type="warning" @click="rollbackVersion(row)">回滚</el-button>
                 <el-button size="small" @click="viewCode(row)" v-if="row.codeContent">查看代码</el-button>
@@ -247,20 +291,42 @@
                 </el-option>
               </el-select>
             </el-form-item>
+            <el-form-item label="代码语言">
+              <el-select v-model="codeGenForm.language" placeholder="请选择代码语言">
+                <el-option label="Java" value="java" />
+                <el-option label="Python" value="python" />
+              </el-select>
+            </el-form-item>
             <el-form-item>
               <el-button type="primary" @click="generateCode">生成代码</el-button>
               <el-button @click="downloadCode">下载代码</el-button>
+              <el-button type="success" plain @click="copySampleCallCode">复制最小调用示例</el-button>
             </el-form-item>
           </el-form>
+          <el-descriptions v-if="generatedCode" :column="2" border style="margin-top: 12px;">
+            <el-descriptions-item label="PSU">{{ selectedCodeGenPsuId }}</el-descriptions-item>
+            <el-descriptions-item label="语言">{{ codeGenForm.language }}</el-descriptions-item>
+            <el-descriptions-item label="文件名">{{ buildCodeFileName() }}</el-descriptions-item>
+            <el-descriptions-item label="生成时间">{{ formatDateTime(new Date()) }}</el-descriptions-item>
+          </el-descriptions>
           <div v-if="generatedCode" class="code-preview">
             <h3>生成的代码预览</h3>
             <pre>{{ generatedCode }}</pre>
+          </div>
+          <div class="code-preview">
+            <h3>最小调用示例</h3>
+            <pre>{{ buildSampleCallCode() }}</pre>
           </div>
         </div>
 
         <!-- 发版中心 -->
         <div v-if="activeMenu === '6'" class="content-section">
           <ReleaseCenter />
+        </div>
+        
+        <!-- 评估中心 -->
+        <div v-if="activeMenu === '7'" class="content-section">
+          <EvaluationCenter />
         </div>
       </el-main>
     </el-container>
@@ -370,12 +436,14 @@
 
 <script setup>
 import { ref, reactive, onMounted, watch, computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import api, { psuApi, schemaApi, testDatasetApi, versionReviewApi, paramSetApi } from '@/services/api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import ReleaseCenter from '@/views/developer/ReleaseCenter.vue'
+import EvaluationCenter from '@/views/developer/EvaluationCenter.vue'
 
 const route = useRoute()
+const router = useRouter()
 const activeMenu = ref('1')
 const isSidebarCollapsed = ref(false)
 const showCreatePsuDialog = ref(false)
@@ -384,6 +452,7 @@ const showEditPromptDialog = ref(false)
 const showCodeDialog = ref(false)
 const showCreateDatasetDialog = ref(false)
 const showViewDatasetDialog = ref(false)
+const showSchemaHistoryDrawer = ref(false)
 
 // PSU数据
 const psus = ref([])
@@ -414,6 +483,8 @@ const paramSetForm = reactive({
   paramSetContent: '{}',
   changeLog: ''
 })
+const schemaVersions = ref([])
+const loadingSchemaVersions = ref(false)
 
 // Prompt数据
 const selectedPromptPsuId = ref('')
@@ -432,6 +503,9 @@ const versionReviewPagination = reactive({
 const selectedCodeGenPsuId = ref('')
 const generatedCode = ref('')
 const viewingCode = ref('')
+const codeGenForm = reactive({
+  language: 'java'
+})
 
 // 测试数据集数据
 const testDatasets = ref([])
@@ -457,6 +531,9 @@ const psuRules = {
 // 菜单选择处理
 const handleMenuSelect = (index) => {
   // 统一在当前页面切换模块，避免左侧导航栏因跨路由跳转发生变化
+  if (index === '7') {
+    router.push('/developer?menu=7')
+  }
   activeMenu.value = index
 }
 
@@ -469,7 +546,7 @@ const toggleSidebar = () => {
 // 根据路由参数初始化当前菜单，支持从其他页面直达指定模块
 const syncMenuFromRoute = () => {
   const routeMenu = String(route.query.menu || '')
-  const allowedMenus = ['1', '2', '3', '4', '5', '6']
+  const allowedMenus = ['1', '2', '3', '4', '5', '6', '7']
   if (allowedMenus.includes(routeMenu)) {
     activeMenu.value = routeMenu
   }
@@ -518,6 +595,29 @@ const rollbackVersion = async (review) => {
       ElMessage.error(error.response?.data?.message || '版本回滚失败')
     }
   }
+}
+
+// 跳转审核预览页面，便于在审核前查看参数集渲染效果
+const goReviewPreview = (review) => {
+  router.push(`/developer/psus/${review.psuId}/reviews/${review.id}`)
+}
+
+const focusedReviewId = computed(() => {
+  const id = Number(route.query.reviewId)
+  return Number.isInteger(id) && id > 0 ? id : null
+})
+
+const queryPsuId = computed(() => {
+  const id = Number(route.query.psuId)
+  return Number.isInteger(id) && id > 0 ? id : null
+})
+
+const versionReviewRowClassName = ({ row }) => {
+  // 从预览页返回时高亮当前审核单据，方便快速定位
+  if (focusedReviewId.value && Number(row?.id) === focusedReviewId.value) {
+    return 'focused-review-row'
+  }
+  return ''
 }
 
 // 加载参数集（覆盖写）
@@ -729,6 +829,7 @@ const loadSchema = async () => {
     schemaForm.schemaContent = response.data.schemaContent
     schemaForm.changeLog = response.data.changeLog || ''
     await loadParamSet()
+    await loadSchemaVersions()
     // 加载Schema后同时加载测试数据集
     loadTestDatasets()
   } catch (error) {
@@ -902,10 +1003,77 @@ const rejectVersion = async (review) => {
   }
 }
 
+// 登记Git提交哈希，便于版本与代码仓库记录对齐
+const registerGitCommit = async (review) => {
+  try {
+    const { value } = await ElMessageBox.prompt('请输入Git提交哈希（7-40位十六进制）', '登记Git提交', {
+      confirmButtonText: '提交',
+      cancelButtonText: '取消',
+      inputPattern: /^[0-9a-fA-F]{7,40}$/,
+      inputErrorMessage: '请输入7-40位十六进制hash'
+    })
+    await versionReviewApi.registerGitCommit(review.id, { gitCommitHash: value })
+    ElMessage.success('Git提交登记成功')
+    await loadVersionReviews()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.response?.data?.message || 'Git提交登记失败')
+    }
+  }
+}
+
+const startDatasetEvaluation = (dataset) => {
+  // 从测试集一键进入评估中心，并带上预选参数触发快速建任务。
+  if (!selectedPsuId.value || !dataset?.id) {
+    ElMessage.warning('请选择有效测试集后再发起评估')
+    return
+  }
+  router.push({
+    path: '/developer/evaluations',
+    query: {
+      psuId: String(selectedPsuId.value),
+      datasetId: String(dataset.id),
+      autoCreate: '1'
+    }
+  })
+}
+
+const loadSchemaVersions = async () => {
+  if (!selectedPsuId.value) {
+    schemaVersions.value = []
+    return
+  }
+  loadingSchemaVersions.value = true
+  try {
+    const response = await schemaApi.getSchemaVersions(selectedPsuId.value)
+    schemaVersions.value = Array.isArray(response.data) ? response.data : []
+  } catch (error) {
+    schemaVersions.value = []
+  } finally {
+    loadingSchemaVersions.value = false
+  }
+}
+
+const openSchemaHistory = async () => {
+  if (!selectedPsuId.value) {
+    ElMessage.warning('请先选择PSU')
+    return
+  }
+  await loadSchemaVersions()
+  showSchemaHistoryDrawer.value = true
+}
+
+const viewSchemaSnapshot = (schema) => {
+  ElMessageBox.alert(formatJsonText(schema?.schemaContent || '{}'), 'Schema快照', {
+    confirmButtonText: '关闭'
+  })
+}
+
 // 查看代码
 const viewCode = async (review) => {
   try {
-    const response = await versionReviewApi.getCode(review.psuId)
+    // 审核列表“查看代码”保持Java默认产物，避免影响既有使用习惯。
+    const response = await versionReviewApi.getCode(review.psuId, 'java')
     viewingCode.value = response.data
     showCodeDialog.value = true
   } catch (error) {
@@ -922,7 +1090,7 @@ const generateCode = async () => {
   }
   
   try {
-    const response = await versionReviewApi.getCode(selectedCodeGenPsuId.value)
+    const response = await versionReviewApi.getCode(selectedCodeGenPsuId.value, codeGenForm.language)
     generatedCode.value = response.data
     ElMessage.success('代码生成成功')
   } catch (error) {
@@ -942,15 +1110,70 @@ const downloadCode = () => {
   const url = window.URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = 'generated-code.java'
+  a.download = buildCodeFileName()
   a.click()
   window.URL.revokeObjectURL(url)
+}
+
+const buildCodeFileName = () => {
+  // 下载名统一为 PSU + 语言 + 时间戳，方便追溯产物来源。
+  const lang = codeGenForm.language === 'python' ? 'python' : 'java'
+  const ext = lang === 'python' ? 'py' : 'java'
+  const ts = new Date()
+    .toISOString()
+    .replace(/[-:]/g, '')
+    .replace('T', '-')
+    .slice(0, 15)
+  return `psu-${selectedCodeGenPsuId.value || 'unknown'}-${lang}-${ts}.${ext}`
+}
+
+const buildSampleCallCode = () => {
+  const psuId = Number(selectedCodeGenPsuId.value || 0)
+  const javaPsuLiteral = psuId > 0 ? `${psuId}L` : '1L // TODO 替换为真实PSU ID'
+  const pyPsuLiteral = psuId > 0 ? String(psuId) : '1  # TODO 替换为真实PSU ID'
+  if (codeGenForm.language === 'python') {
+    return [
+      'import requests',
+      '',
+      'payload = {',
+      `  "psuId": ${pyPsuLiteral},`,
+      '  "environment": "PROD",',
+      '  "input": {"message": "hello"}',
+      '}',
+      'resp = requests.post("http://localhost:8084/api/prompt-service/resolve", json=payload, timeout=10)',
+      'resp.raise_for_status()',
+      'print(resp.json())'
+    ].join('\n')
+  }
+  return [
+    'Map<String, Object> payload = new HashMap<>();',
+    `payload.put("psuId", ${javaPsuLiteral});`,
+    'payload.put("environment", "PROD");',
+    'payload.put("input", Map.of("message", "hello"));',
+    '',
+    'ResponseEntity<Map> resp = restTemplate.postForEntity(',
+    '    "http://localhost:8084/api/prompt-service/resolve",',
+    '    payload,',
+    '    Map.class',
+    ');',
+    'System.out.println(resp.getBody());'
+  ].join('\n')
 }
 
 // 复制代码
 const copyCode = () => {
   navigator.clipboard.writeText(viewingCode.value)
   ElMessage.success('代码已复制到剪贴板')
+}
+
+const copySampleCallCode = async () => {
+  // 按当前语言生成最小调用示例，便于研发快速粘贴接入。
+  try {
+    await navigator.clipboard.writeText(buildSampleCallCode())
+    ElMessage.success('最小调用示例已复制')
+  } catch (error) {
+    ElMessage.error('复制最小调用示例失败')
+  }
 }
 
 // 加载PSU列表
@@ -968,7 +1191,7 @@ const loadPsus = async () => {
 // 加载版本审核列表
 const loadVersionReviews = async () => {
   try {
-    const response = await versionReviewApi.getVersionReviews(null, versionReviewPagination.page, versionReviewPagination.size)
+    const response = await versionReviewApi.getVersionReviews(queryPsuId.value, versionReviewPagination.page, versionReviewPagination.size)
     versionReviews.value = Array.isArray(response.data?.content) ? response.data.content : []
     versionReviewPagination.total = response.data?.totalElements || 0
   } catch (error) {
@@ -1060,6 +1283,10 @@ watch(
   border-top: 7px solid transparent;
   border-bottom: 7px solid transparent;
   border-left: 10px solid #606266;
+}
+
+:deep(.focused-review-row) {
+  --el-table-tr-bg-color: #ecf5ff;
 }
 
 .main-content {

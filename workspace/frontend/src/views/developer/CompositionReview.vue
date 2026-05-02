@@ -1,6 +1,6 @@
 <template>
   <div class="composition-review">
-    <el-page-header content="编排审核快照" @back="$router.push('/developer')" />
+    <el-page-header content="编排审核快照" @back="goBackToReviewList" />
     <el-card style="margin-top: 16px" v-loading="loading">
       <template #header>
         <div class="header-row">
@@ -29,17 +29,20 @@
         :title="`缺失变量: ${missingVars.join(', ')}`"
       />
       <el-input v-model="previewPrompt" style="margin-top: 8px" type="textarea" :rows="8" readonly />
+      <h4 style="margin-top: 16px">参数集快照</h4>
+      <el-input v-model="paramSetSnapshotText" type="textarea" :rows="8" readonly />
     </el-card>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { compositionApi, versionReviewApi } from '@/services/api'
 import { ElMessage } from 'element-plus'
 
 const route = useRoute()
+const router = useRouter()
 const psuId = computed(() => Number(route.params.psuId))
 const reviewId = computed(() => Number(route.params.reviewId))
 
@@ -50,6 +53,7 @@ const content = ref('')
 const compositionStatus = ref('DRAFT')
 const previewPrompt = ref('')
 const missingVars = ref([])
+const paramSetSnapshotText = ref('{}')
 
 const statusTagType = computed(() => {
   const map = { DRAFT: 'info', CANDIDATE: 'warning', FORMAL: 'success', ARCHIVED: 'info' }
@@ -84,10 +88,25 @@ const loadPreviewByParamSet = async () => {
     const res = await versionReviewApi.previewByParamSet(reviewId.value)
     previewPrompt.value = res.data?.renderedPrompt || ''
     missingVars.value = Array.isArray(res.data?.missingVars) ? res.data.missingVars : []
+    paramSetSnapshotText.value = formatJsonText(res.data?.paramSetSnapshot || {})
   } catch (e) {
     ElMessage.error(e.response?.data?.message || '按参数集渲染失败')
   } finally {
     previewing.value = false
+  }
+}
+
+const goBackToReviewList = () => {
+  // 返回版本审核菜单并携带定位参数，方便回到当前审核单据
+  router.push(`/developer?menu=4&psuId=${psuId.value}&reviewId=${reviewId.value}`)
+}
+
+const formatJsonText = (data) => {
+  if (!data) return '{}'
+  try {
+    return JSON.stringify(data, null, 2)
+  } catch (e) {
+    return String(data)
   }
 }
 </script>

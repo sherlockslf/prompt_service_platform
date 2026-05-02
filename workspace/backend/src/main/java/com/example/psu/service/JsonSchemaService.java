@@ -17,6 +17,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * JSON Schema管理服务
+ *
+ * @author SLF
+ * @date 2026-04-29
+ * @description 提供Schema覆盖写管理与版本历史查询能力
  */
 @Service
 public class JsonSchemaService {
@@ -101,10 +105,12 @@ public class JsonSchemaService {
      */
     public List<JsonSchema> getSchemaVersions(Long psuId) {
         RequestValidationUtils.requireNonNull(psuId, "psuId");
+        Long safePsuId = Objects.requireNonNull(psuId);
+        // 先校验PSU存在，避免前端误传时返回空列表造成误判。
+        psuRepository.findById(safePsuId)
+                .orElseThrow(() -> new RuntimeException("PSU not found: " + safePsuId));
         // 兼容旧接口：覆盖写模式下仅返回当前一条
-        return jsonSchemaRepository.findByPsuId(psuId)
-                .map(List::of)
-                .orElse(List.of());
+        return jsonSchemaRepository.findByPsuIdOrderByVersionDesc(safePsuId);
     }
 
     private JsonSchema initializeEmptySchema(Long psuId, Long userId) {

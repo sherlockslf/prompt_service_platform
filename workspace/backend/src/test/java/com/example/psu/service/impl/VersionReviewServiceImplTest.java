@@ -159,7 +159,7 @@ class VersionReviewServiceImplTest {
         when(versionReviewRepository.findTopByPsuIdAndStatusOrderByReviewedAtDesc(1L, ReviewStatus.FORMAL))
             .thenReturn(Optional.empty());
 
-        assertThrows(BusinessException.class, () -> versionReviewService.getCode(1L));
+        assertThrows(BusinessException.class, () -> versionReviewService.getCode(1L, "java"));
     }
 
     @Test

@@ -214,6 +214,8 @@ CREATE TABLE IF NOT EXISTS ai_prompt_test_runs (
     total_cases INT NOT NULL DEFAULT 0 COMMENT '总用例数',
     success_cases INT NOT NULL DEFAULT 0 COMMENT '成功用例数',
     failed_cases INT NOT NULL DEFAULT 0 COMMENT '失败用例数',
+    status VARCHAR(32) NOT NULL DEFAULT 'RUNNING' COMMENT '测试状态（DB不校验，后端校验）',
+    exception_reason TEXT NULL COMMENT '运行异常原因（DB不校验，后端校验）',
     created_by BIGINT NOT NULL DEFAULT 0 COMMENT '执行人',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     
@@ -229,8 +231,10 @@ CREATE TABLE IF NOT EXISTS ai_prompt_test_run_items (
     case_name VARCHAR(200) NOT NULL COMMENT '用例名称',
     input_json LONGTEXT COMMENT '输入参数JSON',
     rendered_prompt LONGTEXT COMMENT '渲染后的Prompt',
-    model_output LONGTEXT COMMENT '模型输出',
+    model_output LONGTEXT COMMENT '实际输出（兼容历史字段名）',
+    status VARCHAR(32) NOT NULL DEFAULT 'SUCCESS' COMMENT '用例状态（DB不校验，后端校验）',
     error_message TEXT COMMENT '错误信息',
+    exception_reason TEXT NULL COMMENT '用例异常原因（DB不校验，后端校验）',
     success TINYINT(1) NOT NULL COMMENT '是否成功',
     latency_ms INT NULL COMMENT '耗时(毫秒)',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -311,6 +315,64 @@ CREATE TABLE IF NOT EXISTS ai_prompt_rollbacks (
     INDEX idx_rollbacks_psu_env (psu_id, environment),
     INDEX idx_rollbacks_created_at (created_at)
 ) COMMENT 'AI Prompt回滚记录表';
+
+-- 创建评估任务表
+CREATE TABLE IF NOT EXISTS ai_prompt_evaluation_tasks (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    psu_id BIGINT NOT NULL COMMENT '关联PSU ID',
+    dataset_id BIGINT NOT NULL COMMENT '关联测试集ID',
+    status VARCHAR(32) NOT NULL DEFAULT 'CREATED' COMMENT '任务状态（后端校验）',
+    total_cases INT NOT NULL DEFAULT 0 COMMENT '总用例数',
+    processed_cases INT NOT NULL DEFAULT 0 COMMENT '已处理用例数',
+    success_cases INT NOT NULL DEFAULT 0 COMMENT '成功用例数',
+    failed_cases INT NOT NULL DEFAULT 0 COMMENT '失败用例数',
+    average_score DECIMAL(5,2) NULL COMMENT '平均分',
+    error_message TEXT NULL COMMENT '任务错误信息',
+    created_by BIGINT NOT NULL DEFAULT 0 COMMENT '创建人ID',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    started_at DATETIME NULL COMMENT '开始时间',
+    finished_at DATETIME NULL COMMENT '结束时间',
+
+    INDEX idx_eval_tasks_psu_id (psu_id),
+    INDEX idx_eval_tasks_dataset_id (dataset_id),
+    INDEX idx_eval_tasks_created_at (created_at)
+) COMMENT 'AI Prompt评估任务表';
+
+-- 创建评估明细结果表
+CREATE TABLE IF NOT EXISTS ai_prompt_evaluation_item_results (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    task_id BIGINT NOT NULL COMMENT '关联评估任务ID',
+    case_id VARCHAR(100) NOT NULL COMMENT '用例ID',
+    case_name VARCHAR(200) NOT NULL COMMENT '用例名称',
+    input_json LONGTEXT COMMENT '输入参数JSON',
+    rendered_prompt LONGTEXT COMMENT '渲染Prompt',
+    actual_output LONGTEXT COMMENT '实际输出',
+    status VARCHAR(32) NOT NULL DEFAULT 'SUCCESS' COMMENT '用例状态（后端校验）',
+    relevance_score DECIMAL(5,2) NULL COMMENT '相关性评分',
+    completeness_score DECIMAL(5,2) NULL COMMENT '完整性评分',
+    format_score DECIMAL(5,2) NULL COMMENT '格式符合度评分',
+    total_score DECIMAL(5,2) NULL COMMENT '总分',
+    reason TEXT NULL COMMENT '评分或失败原因',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    INDEX idx_eval_items_task_id (task_id),
+    INDEX idx_eval_items_case_id (case_id),
+    INDEX idx_eval_items_created_at (created_at)
+) COMMENT 'AI Prompt评估明细结果表';
+
+-- 创建评估报告表
+CREATE TABLE IF NOT EXISTS ai_prompt_evaluation_reports (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    task_id BIGINT NOT NULL COMMENT '关联评估任务ID',
+    overall_score DECIMAL(5,2) NULL COMMENT '总体评分',
+    pass_rate DECIMAL(5,2) NULL COMMENT '通过率',
+    summary_json LONGTEXT NULL COMMENT '报告摘要JSON',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    UNIQUE KEY uk_eval_reports_task_id (task_id),
+    INDEX idx_eval_reports_created_at (created_at)
+) COMMENT 'AI Prompt评估报告表';
 
 -- 初始化预置用户（每种角色一个）
 INSERT IGNORE INTO ai_prompt_users (username, password, role, enabled) 

@@ -16,7 +16,7 @@ import com.example.psu.service.AuditLogService;
  * 审计日志控制器（仅管理员使用）
  */
 @RestController
-@RequestMapping("/api/audit-logs")
+@RequestMapping({"/api/audit-logs", "/api/v1/audit-logs"})
 public class AuditLogController {
     
     @Autowired
@@ -42,4 +42,5 @@ public class AuditLogController {
         return ResponseEntity.ok(logs);
     }
 }
+
 

@@ -1,8 +1,14 @@
 import axios from 'axios'
 
+const LEGACY_API_PREFIX = '/api'
+const VERSIONED_API_PREFIX = '/api/v1'
+// 默认保持旧路径兼容；需要联调新路径时可配置 VITE_API_USE_V1=true。
+const USE_VERSIONED_API = String(import.meta.env.VITE_API_USE_V1 || 'false').toLowerCase() === 'true'
+const API_BASE_PREFIX = USE_VERSIONED_API ? VERSIONED_API_PREFIX : LEGACY_API_PREFIX
+
 // 创建axios实例
 const api = axios.create({
-  baseURL: '/api', // 代理到后端API
+  baseURL: API_BASE_PREFIX,
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json'
@@ -106,7 +112,7 @@ export const versionApi = {
   // 审核版本
   reviewVersion: (reviewId, data) => api.post(`/versions/${reviewId}/review`, data),
   // 获取生成的代码
-  getCode: (psuId) => api.get(`/versions/${psuId}/code`)
+  getCode: (psuId, language = 'java') => api.get(`/versions/${psuId}/code`, { params: { language } })
 }
 
 export const userApi = {
@@ -172,11 +178,18 @@ export const versionReviewApi = {
     return api.post(`/versions/${psuId}/rollback`, data);
   },
   // 获取生成的代码
-  getCode: (psuId) => {
+  getCode: (psuId, language = 'java') => {
     if (!isValidPsuId(psuId)) {
       return Promise.reject(new Error(`Invalid PSU ID: ${psuId}`));
     }
-    return api.get(`/versions/${psuId}/code`);
+    return api.get(`/versions/${psuId}/code`, { params: { language } });
+  },
+  // 登记Git提交哈希
+  registerGitCommit: (reviewId, data) => {
+    if (!isValidPsuId(reviewId)) {
+      return Promise.reject(new Error(`Invalid Review ID: ${reviewId}`));
+    }
+    return api.post(`/versions/${reviewId}/git-commit`, data);
   }
   ,
   // 审核预览：按参数集渲染当前待审编排
@@ -277,7 +290,31 @@ export const testRunApi = {
     }
     return api.post('/test-runs', data, { params: { psuId, datasetId } });
   },
-  getTestRun: (runId) => api.get(`/test-runs/${runId}`)
+  getTestRun: (runId) => api.get(`/test-runs/${runId}`),
+  getTestRuns: (psuId, datasetId) => {
+    if (!isValidPsuId(psuId)) {
+      return Promise.reject(new Error(`Invalid PSU ID: ${psuId}`));
+    }
+    const params = { psuId };
+    if (datasetId) {
+      params.datasetId = datasetId;
+    }
+    return api.get('/test-runs', { params });
+  }
+}
+
+export const evaluationApi = {
+  createTask: (data) => api.post('/evaluations/tasks', data),
+  runTask: (taskId) => api.post(`/evaluations/tasks/${taskId}/run`),
+  getTasks: (psuId, datasetId) => {
+    const params = { psuId }
+    if (datasetId) {
+      params.datasetId = datasetId
+    }
+    return api.get('/evaluations/tasks', { params })
+  },
+  getTask: (taskId) => api.get(`/evaluations/tasks/${taskId}`),
+  getReport: (reportId) => api.get(`/evaluations/reports/${reportId}`)
 }
 
 // 验证PSU ID是否为有效的正整数

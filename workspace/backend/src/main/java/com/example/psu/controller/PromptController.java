@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.example.psu.dto.request.CreatePromptRequest;
 import com.example.psu.dto.request.UpdatePromptRequest;
 import com.example.psu.dto.response.PromptFragmentResponse;
+import com.example.psu.dto.response.PromptTestResponse;
 import com.example.psu.entity.PromptFragment;
 import com.example.psu.service.PromptService;
 
@@ -27,9 +28,13 @@ import java.util.Objects;
 
 /**
  * Prompt管理控制器
+ *
+ * @author SLF
+ * @date 2026-04-29
+ * @description 提供Prompt片段管理与统一测试接口
  */
 @RestController
-@RequestMapping("/api/prompts")
+@RequestMapping({"/api/prompts", "/api/v1/prompts"})
 public class PromptController {
 
     private static final Long DEFAULT_OPERATOR_ID = 0L;
@@ -100,8 +105,9 @@ public class PromptController {
      * 参数：psuId-PSU数据库ID，requestBody-测试输入参数
      */
     @PostMapping("/{psuId}/test")
-    public ResponseEntity<String> testPrompt(@PathVariable Long psuId, @RequestBody Map<String, Object> requestBody) {
-        String result = promptService.testPrompt(psuId, requestBody);
+    public ResponseEntity<PromptTestResponse> testPrompt(@PathVariable Long psuId, @RequestBody Map<String, Object> requestBody) {
+        // 统一返回结构化测试结果，便于前端展示渲染文本与缺失变量
+        PromptTestResponse result = promptService.testPrompt(psuId, requestBody);
         return ResponseEntity.ok(result);
     }
     
@@ -116,4 +122,5 @@ public class PromptController {
         return response;
     }
 }
+
 

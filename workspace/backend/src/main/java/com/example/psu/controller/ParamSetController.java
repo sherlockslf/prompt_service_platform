@@ -21,7 +21,7 @@ import java.util.Objects;
  * 参数集管理控制器
  */
 @RestController
-@RequestMapping("/api/param-sets")
+@RequestMapping({"/api/param-sets", "/api/v1/param-sets"})
 public class ParamSetController {
 
     private static final Long DEFAULT_OPERATOR_ID = 0L;
@@ -73,5 +73,6 @@ public class ParamSetController {
         return response;
     }
 }
+
 
 

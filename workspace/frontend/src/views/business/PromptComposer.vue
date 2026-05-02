@@ -110,38 +110,20 @@
             />
           </div>
           <div class="test-result-panel">
-            <h4>接口测试（大模型对话）</h4>
-            <div class="chat-control-row">
-              <el-select v-model="selectedModel" style="width: 220px" placeholder="请选择模型">
-                <el-option label="qwen-plus" value="qwen-plus" />
-                <el-option label="qwen3-max" value="qwen3-max" />
-                <el-option label="qwen3.6-plus" value="qwen3.6-plus" />
-              </el-select>
-            </div>
+            <h4>接口测试（统一后端测试接口）</h4>
             <el-button
               style="margin-top: 8px"
               type="primary"
               :loading="testingModel"
               @click="runModelChatTest"
-            >按渲染文本测试</el-button>
-            <div v-if="chatMessages.length > 0" class="chat-history">
-              <div
-                v-for="(msg, idx) in chatMessages"
-                :key="`chat-${idx}`"
-                class="chat-item"
-                :class="msg.role === 'assistant' ? 'assistant' : 'user'"
-              >
-                <div class="chat-role">{{ msg.role === 'assistant' ? '模型回复' : '用户输入' }}</div>
-                <div class="chat-content">{{ msg.content }}</div>
-              </div>
-            </div>
+            >执行接口测试</el-button>
             <el-input
               v-model="modelTestOutput"
               style="margin-top: 8px"
               type="textarea"
               :rows="8"
               readonly
-              placeholder="最近一次模型回复将显示在这里"
+              placeholder="最近一次接口测试结果将显示在这里"
             />
             <el-alert
               v-if="modelTestError"
@@ -193,6 +175,11 @@
               :loading="submitting"
             >提交审核</el-button>
           </div>
+
+          <div v-if="selectedPsuId" class="dataset-runner-panel">
+            <h4>测试集批量运行</h4>
+            <TestDatasetRunner :psu-id="Number(selectedPsuId)" />
+          </div>
         </el-aside>
       </el-container>
     </el-container>
@@ -212,10 +199,11 @@ import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
-import { compositionApi, schemaApi, psuApi, testDatasetApi, configApi, paramSetApi } from '@/services/api'
+import { compositionApi, schemaApi, psuApi, testDatasetApi, promptApi, paramSetApi } from '@/services/api'
 import SchemaVariablePanel from '@/components/composer/SchemaVariablePanel.vue'
 import PromptTextEditor from '@/components/composer/PromptTextEditor.vue'
 import InjectionSummaryPanel from '@/components/composer/InjectionSummaryPanel.vue'
+import TestDatasetRunner from '@/components/composer/TestDatasetRunner.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -253,11 +241,8 @@ const selectedDatasetInput = ref({})
 const paramSetInput = ref({})
 const paramSetContent = ref('{}')
 const datasetPreviewExpanded = ref(false)
-const selectedModel = ref('qwen-plus')
-const dashscopeApiKey = ref('')
 const modelTestOutput = ref('')
 const modelTestError = ref('')
-const chatMessages = ref([])
 const editorRef = ref(null)
 
 const isReadonly = computed(() => status.value !== 'DRAFT')
@@ -276,7 +261,6 @@ onMounted(async () => {
   // 页面初始化先加载PSU列表，选定PSU后再加载编排上下文
   await loadAvailablePsus()
   await initializeBySelectedPsu()
-  await loadDashscopeApiKey(false)
 })
 
 onBeforeUnmount(() => {
@@ -379,7 +363,6 @@ function resetComposerState() {
   datasetPreviewExpanded.value = false
   modelTestOutput.value = ''
   modelTestError.value = ''
-  chatMessages.value = []
   hasUnsavedChanges.value = false
 }
 
@@ -473,19 +456,6 @@ async function saveParamSet() {
     ElMessage.success('参数集已保存')
   } catch (e) {
     ElMessage.error(e.response?.data?.message || '参数集保存失败，请检查JSON格式')
-  }
-}
-
-async function loadDashscopeApiKey(showError = true) {
-  // 从后端读取任意一个配置中的DashScope API Key
-  try {
-    const res = await configApi.getDashscopeKey()
-    dashscopeApiKey.value = (res.data?.apiKey || '').trim()
-  } catch (e) {
-    dashscopeApiKey.value = ''
-    if (showError) {
-      ElMessage.error('获取DashScope API Key失败，请联系管理员检查后端配置')
-    }
   }
 }
 
@@ -784,52 +754,34 @@ function cloneObject(value) {
 }
 
 async function runModelChatTest() {
-  // 严格使用“渲染预览”文本框中的当前文本进行接口测试
-  if (!renderedPrompt.value?.trim()) {
-    ElMessage.warning('渲染预览文本为空，请先填写或渲染内容')
-    return
-  }
-  if (!dashscopeApiKey.value) {
-    await loadDashscopeApiKey(true)
-  }
-  const apiKey = dashscopeApiKey.value
-  if (!apiKey) {
-    ElMessage.error('缺少DashScope API Key，请联系管理员配置后端')
+  // 统一走后端Prompt测试接口，避免前端出现多套测试路径
+  if (!selectedPsuId.value) {
+    ElMessage.warning('请先选择PSU')
     return
   }
   testingModel.value = true
   modelTestError.value = ''
   try {
-    const requestMessages = [
-      ...chatMessages.value,
-      { role: 'user', content: renderedPrompt.value }
-    ]
-    const response = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: selectedModel.value,
-        messages: requestMessages,
-        stream: false,
-        enable_thinking: false
-      })
-    })
-    const data = await response.json()
-    if (!response.ok) {
-      throw new Error(data?.error?.message || data?.message || `请求失败: ${response.status}`)
+    // 测试输入优先使用参数集，并用测试数据集做覆盖
+    let input = cloneObject(paramSetInput.value)
+    if (Object.keys(selectedDatasetInput.value || {}).length > 0) {
+      input = { ...input, ...cloneObject(selectedDatasetInput.value) }
     }
-    const output = data?.choices?.[0]?.message?.content || ''
-    chatMessages.value.push(
-      { role: 'user', content: renderedPrompt.value },
-      { role: 'assistant', content: output || '[空回复]' }
-    )
-    modelTestOutput.value = output || JSON.stringify(data, null, 2)
+    const response = await promptApi.testPrompt(selectedPsuId.value, input)
+    const data = response.data || {}
+    const resultText = {
+      renderedPrompt: data.renderedPrompt || '',
+      missingVars: Array.isArray(data.missingVars) ? data.missingVars : [],
+      latencyMs: data.latencyMs ?? null,
+      traceId: data.traceId || ''
+    }
+    modelTestOutput.value = JSON.stringify(resultText, null, 2)
+    if (Array.isArray(resultText.missingVars) && resultText.missingVars.length > 0) {
+      modelTestError.value = `缺失变量: ${resultText.missingVars.join(', ')}`
+    }
     ElMessage.success('接口测试完成')
   } catch (e) {
-    modelTestError.value = e.message || '模型测试失败'
+    modelTestError.value = e.response?.data?.message || e.message || '接口测试失败'
     ElMessage.error(modelTestError.value)
   } finally {
     testingModel.value = false

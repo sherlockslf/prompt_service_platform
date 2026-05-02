@@ -28,16 +28,25 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * 版本审核服务实现
+ *
+ * @author SLF
+ * @date 2026-04-29
+ * @description 提供版本提审、审核、回滚与Git提交登记能力
  */
 @Service
 @Transactional
 public class VersionReviewServiceImpl implements VersionReviewService {
+    private static final Pattern GIT_COMMIT_HASH_PATTERN = Pattern.compile("^[0-9a-fA-F]{7,40}$");
+    private static final String LANGUAGE_JAVA = "java";
+    private static final String LANGUAGE_PYTHON = "python";
 
     private final VersionReviewRepository versionReviewRepository;
     private final PsuRepository psuRepository;
@@ -193,16 +202,21 @@ public class VersionReviewServiceImpl implements VersionReviewService {
     }
 
     @Override
-    public String getCode(Long psuId) {
+    public String getCode(Long psuId, String language) {
         RequestValidationUtils.requireNonNull(psuId, "psuId");
+        String normalizedLanguage = normalizeLanguage(language);
         VersionReview approved = versionReviewRepository.findTopByPsuIdAndStatusOrderByReviewedAtDesc(psuId, ReviewStatus.FORMAL)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "未找到已通过审核的版本"));
 
-        if (approved.getCodeContent() == null || approved.getCodeContent().isBlank()) {
-            approved.setCodeContent(codeGeneratorService.generateCompleteBusinessCode(psuId));
+        // Java产物沿用历史持久化逻辑；Python产物按需生成，避免覆盖历史Java代码内容。
+        if (LANGUAGE_JAVA.equals(normalizedLanguage) && (approved.getCodeContent() == null || approved.getCodeContent().isBlank())) {
+            approved.setCodeContent(codeGeneratorService.generateCompleteBusinessCode(psuId, LANGUAGE_JAVA));
             versionReviewRepository.save(approved);
         }
 
+        if (LANGUAGE_PYTHON.equals(normalizedLanguage)) {
+            return codeGeneratorService.generateCompleteBusinessCode(psuId, LANGUAGE_PYTHON);
+        }
         return approved.getCodeContent();
     }
 
@@ -215,6 +229,11 @@ public class VersionReviewServiceImpl implements VersionReviewService {
         if (gitCommitHash == null || gitCommitHash.isBlank()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "gitCommitHash不能为空");
         }
+        String normalizedHash = gitCommitHash.trim();
+        // 强约束Git哈希格式，兼容7-40位十六进制短/长hash
+        if (!GIT_COMMIT_HASH_PATTERN.matcher(normalizedHash).matches()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "gitCommitHash格式非法，仅支持7-40位十六进制字符");
+        }
 
         VersionReview review = versionReviewRepository.findById(safeReviewId)
             .orElseThrow(() -> new BusinessException(ErrorCode.VERSION_NOT_FOUND, "审核记录不存在"));
@@ -223,7 +242,7 @@ public class VersionReviewServiceImpl implements VersionReviewService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "仅审核通过的记录允许登记Git提交");
         }
 
-        review.setGitCommitHash(gitCommitHash.trim());
+        review.setGitCommitHash(normalizedHash);
         review.setReviewerId(safeOperatorId);
         review.setReviewedAt(LocalDateTime.now());
         return versionReviewRepository.save(review);
@@ -355,6 +374,17 @@ public class VersionReviewServiceImpl implements VersionReviewService {
         response.setAddedLineCount(added);
         response.setRemovedLineCount(removed);
         response.setChanged(!Objects.equals(fromPrompt, toPrompt));
+    }
+
+    private String normalizeLanguage(String language) {
+        if (language == null || language.isBlank()) {
+            return LANGUAGE_JAVA;
+        }
+        String normalized = language.trim().toLowerCase(Locale.ROOT);
+        if (LANGUAGE_PYTHON.equals(normalized)) {
+            return LANGUAGE_PYTHON;
+        }
+        return LANGUAGE_JAVA;
     }
 }
 

@@ -24,7 +24,7 @@ import jakarta.validation.Valid;
  * PSU管理控制器
  */
 @RestController
-@RequestMapping("/api/psus")
+@RequestMapping({"/api/psus", "/api/v1/psus"})
 public class PsuController {
 
     private static final Long DEFAULT_OPERATOR_ID = 0L;
@@ -99,4 +99,5 @@ public class PsuController {
         return ResponseEntity.ok().build();
     }
 }
+
 

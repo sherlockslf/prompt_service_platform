@@ -28,7 +28,7 @@ import java.util.Objects;
  * 用户管理控制器（仅管理员使用）
  */
 @RestController
-@RequestMapping("/api/users")
+@RequestMapping({"/api/users", "/api/v1/users"})
 public class UserController {
     
     @Autowired
@@ -89,5 +89,6 @@ public class UserController {
         return response;
     }
 }
+
 
 

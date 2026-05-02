@@ -24,7 +24,7 @@ import jakarta.validation.Valid;
  * 测试数据集管理控制器
  */
 @RestController
-@RequestMapping("/api/test-datasets")
+@RequestMapping({"/api/test-datasets", "/api/v1/test-datasets"})
 public class TestDatasetController {
     
     @Autowired
@@ -74,4 +74,5 @@ public class TestDatasetController {
         return ResponseEntity.ok().build();
     }
 }
+
 

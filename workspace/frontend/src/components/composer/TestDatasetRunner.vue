@@ -38,6 +38,7 @@
         <el-tag type="info">总计: {{ testResult.totalCases }}</el-tag>
         <el-tag type="success" style="margin-left: 8px">成功: {{ testResult.successCases }}</el-tag>
         <el-tag type="danger" style="margin-left: 8px">失败: {{ testResult.failedCases }}</el-tag>
+        <el-tag style="margin-left: 8px">状态: {{ testResult.status || '-' }}</el-tag>
       </div>
 
         <el-table :data="testResult.items" style="width: 100%; margin-top: 12px" size="small">
@@ -56,13 +57,43 @@
         </el-table-column>
         <el-table-column label="错误摘要" min-width="150">
           <template #default="{ row }">
-            <span v-if="row.error" class="error-text">{{ row.error }}</span>
+            <span v-if="row.exceptionReason || row.error" class="error-text">{{ row.exceptionReason || row.error }}</span>
             <span v-else>-</span>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="80" align="center">
           <template #default="{ row }">
             <el-button size="small" @click="showDetail(row)">详情</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
+
+    <div class="history-panel">
+      <el-divider>运行历史（最近50条）</el-divider>
+      <el-table :data="runHistory" size="small" style="width: 100%">
+        <el-table-column prop="runId" label="Run ID" width="90" />
+        <el-table-column prop="datasetId" label="数据集ID" width="100" />
+        <el-table-column label="统计" min-width="140">
+          <template #default="{ row }">
+            {{ row.successCases }}/{{ row.totalCases }} 成功
+          </template>
+        </el-table-column>
+        <el-table-column prop="status" label="状态" width="130" />
+        <el-table-column label="异常原因" min-width="160">
+          <template #default="{ row }">
+            <span v-if="row.exceptionReason" class="error-text">{{ row.exceptionReason }}</span>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="创建时间" min-width="170">
+          <template #default="{ row }">
+            {{ formatDateTime(row.createdAt) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="90" align="center">
+          <template #default="{ row }">
+            <el-button size="small" @click="openRunDetail(row.runId)">查看</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -75,9 +106,9 @@
         <h5>渲染后的 Prompt</h5>
         <pre class="prompt-block">{{ detailItem.renderedPrompt || '-' }}</pre>
         <h5>模型输出</h5>
-        <pre class="output-block">{{ detailItem.modelOutput || '-' }}</pre>
-        <div v-if="detailItem.error" class="error-block">
-          <strong>错误信息:</strong> {{ detailItem.error }}
+        <pre class="output-block">{{ detailItem.actualOutput || detailItem.modelOutput || '-' }}</pre>
+        <div v-if="detailItem.exceptionReason || detailItem.error" class="error-block">
+          <strong>错误信息:</strong> {{ detailItem.exceptionReason || detailItem.error }}
         </div>
       </div>
     </el-dialog>
@@ -85,7 +116,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { testDatasetApi, testRunApi } from '@/services/api'
 
@@ -97,12 +128,35 @@ const datasets = ref([])
 const selectedDatasetIds = ref([])
 const running = ref(false)
 const testResult = ref(null)
+const runHistory = ref([])
 const showDetailDialog = ref(false)
 const detailItem = ref(null)
 
 onMounted(async () => {
   await loadDatasets()
+  await loadRunHistory()
 })
+
+watch(
+  () => props.psuId,
+  async () => {
+    // PSU切换后重新加载测试集与运行历史，避免展示旧数据
+    selectedDatasetIds.value = []
+    testResult.value = null
+    runHistory.value = []
+    await loadDatasets()
+    await loadRunHistory()
+  }
+)
+
+async function loadRunHistory() {
+  try {
+    const res = await testRunApi.getTestRuns(props.psuId)
+    runHistory.value = Array.isArray(res.data) ? res.data : []
+  } catch (e) {
+    runHistory.value = []
+  }
+}
 
 async function loadDatasets() {
   try {
@@ -132,6 +186,8 @@ async function runTest() {
       totalCases: 0,
       successCases: 0,
       failedCases: 0,
+      status: 'RUNNING',
+      exceptionReason: null,
       items: []
     }
 
@@ -141,6 +197,10 @@ async function runTest() {
       merged.totalCases += Number(data.totalCases || 0)
       merged.successCases += Number(data.successCases || 0)
       merged.failedCases += Number(data.failedCases || 0)
+      if (data.exceptionReason && !merged.exceptionReason) {
+        // 保留首个异常原因，便于在汇总层快速定位问题。
+        merged.exceptionReason = data.exceptionReason
+      }
       const items = Array.isArray(data.items) ? data.items : []
       merged.items.push(...items.map(item => ({
         ...item,
@@ -149,6 +209,8 @@ async function runTest() {
     }
 
     testResult.value = merged
+    merged.status = resolveMergedStatus(merged.totalCases, merged.failedCases)
+    await loadRunHistory()
     if (merged.failedCases === 0) {
       ElMessage.success('批量测试全部通过')
     } else {
@@ -166,6 +228,24 @@ function showDetail(item) {
   showDetailDialog.value = true
 }
 
+async function openRunDetail(runId) {
+  try {
+    const response = await testRunApi.getTestRun(runId)
+    const data = response.data || {}
+    detailItem.value = {
+      input: { runId, totalCases: data.totalCases, successCases: data.successCases, failedCases: data.failedCases },
+      renderedPrompt: '',
+      actualOutput: '',
+      error: '',
+      exceptionReason: data.exceptionReason || '',
+      ...((Array.isArray(data.items) && data.items.length > 0) ? data.items[0] : {})
+    }
+    showDetailDialog.value = true
+  } catch (e) {
+    ElMessage.error('加载运行详情失败')
+  }
+}
+
 function formatJson(obj) {
   if (!obj) return '{}'
   try {
@@ -174,11 +254,29 @@ function formatJson(obj) {
     return String(obj)
   }
 }
+
+function formatDateTime(dateTime) {
+  if (!dateTime) return '-'
+  const date = new Date(dateTime)
+  if (Number.isNaN(date.getTime())) return String(dateTime)
+  return date.toLocaleString('zh-CN', { hour12: false })
+}
+
+function resolveMergedStatus(totalCases, failedCases) {
+  if (!totalCases || totalCases <= 0) return 'SUCCESS'
+  if (!failedCases || failedCases <= 0) return 'SUCCESS'
+  if (failedCases >= totalCases) return 'FAILED'
+  return 'PARTIAL_SUCCESS'
+}
 </script>
 
 <style scoped>
 .test-dataset-runner {
   padding: 8px 0;
+}
+
+.history-panel {
+  margin-top: 8px;
 }
 
 .result-summary {

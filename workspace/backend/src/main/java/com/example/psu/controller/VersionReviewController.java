@@ -30,7 +30,7 @@ import java.util.Map;
  * 版本审核控制器
  */
 @RestController
-@RequestMapping("/api/versions")
+@RequestMapping({"/api/versions", "/api/v1/versions"})
 public class VersionReviewController {
 
     private static final Long DEFAULT_OPERATOR_ID = 0L;
@@ -104,10 +104,17 @@ public class VersionReviewController {
             .orElseThrow(() -> new IllegalArgumentException("审核记录不存在: " + reviewId));
         ParamSet paramSet = paramSetService.getParamSetByPsuId(review.getPsuId());
         try {
+            // 先解析参数集，再在响应中回传快照，便于前端审核定位输入上下文。
+            Map<String, Object> paramSnapshot = objectMapper.readValue(
+                paramSet.getParamSetContent(),
+                new TypeReference<Map<String, Object>>() {}
+            );
             CompositionRenderRequest request = new CompositionRenderRequest();
             request.setCompositionId(review.getCompositionId());
-            request.setInput(objectMapper.readValue(paramSet.getParamSetContent(), new TypeReference<Map<String, Object>>() {}));
-            return ResponseEntity.ok(compositionService.render(review.getPsuId(), request));
+            request.setInput(paramSnapshot);
+            CompositionRenderResponse response = compositionService.render(review.getPsuId(), request);
+            response.setParamSetSnapshot(paramSnapshot);
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
             throw new IllegalArgumentException("参数集解析失败，无法渲染预览");
         }
@@ -115,11 +122,14 @@ public class VersionReviewController {
 
     /**
      * 开发侧版本审核页面/代码生成页面获取已审核通过的生成代码
-     * 参数：psuId-PSU数据库ID
+     * 参数：psuId-PSU数据库ID，language-代码语言（java/python）
      */
     @GetMapping("/{psuId}/code")
-    public ResponseEntity<String> getCode(@PathVariable Long psuId) {
-        return ResponseEntity.ok(versionReviewService.getCode(psuId));
+    public ResponseEntity<String> getCode(
+        @PathVariable Long psuId,
+        @RequestParam(required = false, defaultValue = "java") String language
+    ) {
+        return ResponseEntity.ok(versionReviewService.getCode(psuId, language));
     }
 
     /**
@@ -158,4 +168,5 @@ public class VersionReviewController {
         return ResponseEntity.ok(versionReviewService.registerGitCommit(reviewId, gitCommitHash, DEFAULT_OPERATOR_ID));
     }
 }
+
 

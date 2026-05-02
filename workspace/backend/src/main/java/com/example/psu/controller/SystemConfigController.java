@@ -21,7 +21,7 @@ import com.example.psu.service.SystemConfigService;
  * 系统配置控制器（仅管理员使用）
  */
 @RestController
-@RequestMapping("/api/configs")
+@RequestMapping({"/api/configs", "/api/v1/configs"})
 public class SystemConfigController {
     
     @Autowired
@@ -84,4 +84,5 @@ public class SystemConfigController {
         return ResponseEntity.ok().build();
     }
 }
+
 
