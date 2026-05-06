@@ -19,3 +19,4 @@ yarn-error.log*
 pnpm-debug.log*
 **/__pycache__/
 /workspace/tools/__pycache__/
+.venv/
