@@ -65,7 +65,13 @@ public class JsonSchemaController {
             @Valid @RequestBody UpdateSchemaRequest requestBody) {
         RequestValidationUtils.requireNonNull(psuId, "psuId");
         requestBody = RequestValidationUtils.requireNonNull(requestBody, "requestBody");
-        JsonSchema schema = jsonSchemaService.updateSchema(psuId, requestBody.getSchemaContent(), DEFAULT_OPERATOR_ID, requestBody.getChangeLog());
+        JsonSchema schema = jsonSchemaService.updateSchema(
+            psuId,
+            requestBody.getBaseVersionNo(),
+            requestBody.getSchemaContent(),
+            DEFAULT_OPERATOR_ID,
+            requestBody.getChangeLog()
+        );
         JsonSchemaResponse response = convertToResponse(schema);
         return ResponseEntity.ok(response);
     }

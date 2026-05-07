@@ -94,7 +94,7 @@ public class CompositionServiceImpl implements CompositionService {
             composition.setStatus(CompositionStatus.DRAFT);
             composition.setSchemaVersion(resolveCurrentSchemaVersion(psuId));
         } else if (composition.getStatus() != CompositionStatus.DRAFT) {
-            throw new BusinessException(ErrorCode.VERSION_ALREADY_SUBMITTED, "当前编排已锁定，不能继续保存草稿");
+            composition.setStatus(CompositionStatus.DRAFT);
         }
 
         composition.setContent(request.getContent());
@@ -277,12 +277,12 @@ public class CompositionServiceImpl implements CompositionService {
     }
 
     private void assertDraftLifecycle(Long psuId) {
-        // 生命周期约束：仅草稿允许编辑和提审编排
+        // 生命周期约束：归档后只读，其余状态允许进入新一轮开发
         Long safePsuId = Objects.requireNonNull(psuId);
         PsuUnit psu = psuRepository.findById(safePsuId)
             .orElseThrow(() -> new BusinessException(ErrorCode.PSU_NOT_FOUND, "PSU不存在"));
-        if (psu.getStatus() != PsuStatus.DRAFT) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "当前PSU为只读状态，仅草稿可编辑编排");
+        if (psu.getStatus() == PsuStatus.ARCHIVED) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "当前PSU已归档，不允许编辑编排");
         }
     }
 

@@ -74,7 +74,12 @@ public class PromptController {
     public ResponseEntity<PromptFragmentResponse> updatePromptFragment(
             @PathVariable Long fragmentId,
             @Valid @RequestBody UpdatePromptRequest requestBody) {
-        PromptFragment fragment = promptService.updatePromptFragment(fragmentId, requestBody.getContent(), DEFAULT_OPERATOR_ID);
+        PromptFragment fragment = promptService.updatePromptFragment(
+            fragmentId,
+            requestBody.getBaseVersionNo(),
+            requestBody.getContent(),
+            DEFAULT_OPERATOR_ID
+        );
         PromptFragmentResponse response = convertToResponse(fragment);
         return ResponseEntity.ok(response);
     }

@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS ai_prompt_psu (
     description TEXT COMMENT '描述',
     status ENUM('DRAFT', 'CANDIDATE', 'FORMAL', 'ARCHIVED') NOT NULL DEFAULT 'DRAFT' COMMENT '生命周期状态：草稿/候选/正式/归档',
     creator_id BIGINT NOT NULL COMMENT '创建者ID',
-    version_no INT NOT NULL DEFAULT 1 COMMENT '版本号（单字段递增）',
+    version_no INT NOT NULL DEFAULT 1 COMMENT 'PSU版本号（独立递增）',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     
@@ -119,6 +119,24 @@ CREATE TABLE IF NOT EXISTS ai_prompt_version_reviews (
     
     CONSTRAINT uk_version_reviews_version UNIQUE (psu_id, version_no)
 ) COMMENT 'AI Prompt版本审核表';
+
+-- 创建审核发布记录表（与编辑流程解耦）
+CREATE TABLE IF NOT EXISTS ai_prompt_release_versions (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    psu_id BIGINT NOT NULL COMMENT '关联PSU ID',
+    psu_version_no INT NOT NULL COMMENT 'PSU版本号',
+    json_schema_id BIGINT NOT NULL COMMENT 'Schema记录ID',
+    json_schema_version_no INT NOT NULL COMMENT 'Schema版本号',
+    prompt_id BIGINT NOT NULL COMMENT 'Prompt快照ID（composition_id）',
+    prompt_version_no INT NOT NULL COMMENT 'Prompt版本号（composition_revision_no）',
+    tag ENUM('PREVIEW', 'FORMAL') NOT NULL DEFAULT 'PREVIEW' COMMENT '发布标签',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    UNIQUE KEY uk_release_versions_psu_ver (psu_id, psu_version_no),
+    INDEX idx_release_versions_psu_id (psu_id),
+    INDEX idx_release_versions_tag (tag)
+) COMMENT 'AI Prompt审核发布记录表';
 
 -- 创建系统配置表
 CREATE TABLE IF NOT EXISTS ai_prompt_system_configs (

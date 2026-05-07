@@ -2,6 +2,7 @@ package com.example.psu.controller;
 
 import com.example.psu.dto.request.ReviewRequest;
 import com.example.psu.dto.request.RollbackVersionRequest;
+import com.example.psu.dto.request.AssignVersionTagRequest;
 import com.example.psu.dto.request.CompositionRenderRequest;
 import com.example.psu.dto.response.CompositionRenderResponse;
 import com.example.psu.dto.response.VersionCompareResponse;
@@ -166,6 +167,20 @@ public class VersionReviewController {
     ) {
         String gitCommitHash = payload == null ? null : payload.get("gitCommitHash");
         return ResponseEntity.ok(versionReviewService.registerGitCommit(reviewId, gitCommitHash, DEFAULT_OPERATOR_ID));
+    }
+
+    /**
+     * 手动指定版本标签（FORMAL/PREVIEW）
+     */
+    @PostMapping("/{reviewId}/tag")
+    public ResponseEntity<VersionReview> assignVersionTag(
+        @PathVariable Long reviewId,
+        @RequestBody AssignVersionTagRequest request
+    ) {
+        if (request == null || request.getTag() == null) {
+            throw new IllegalArgumentException("tag不能为空");
+        }
+        return ResponseEntity.ok(versionReviewService.assignVersionTag(reviewId, request.getTag(), DEFAULT_OPERATOR_ID));
     }
 }
 

@@ -9,6 +9,8 @@ import lombok.Data;
  */
 @Data
 public class UpdateSchemaRequest {
+
+    private Integer baseVersionNo;
     
     @NotBlank(message = "Schema内容不能为空")
     private String schemaContent;

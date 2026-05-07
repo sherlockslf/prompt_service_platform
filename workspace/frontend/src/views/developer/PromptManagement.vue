@@ -21,7 +21,7 @@
           <el-option
             v-for="psu in psuList"
             :key="psu.id"
-            :label="`${psu.name} (v${psu.versionNo ?? 1})`"
+            :label="`${psu.name} (v${psu.versionNo ?? 1}, ${psu.tag === 'FORMAL' ? '正式版' : '预览版'})`"
             :value="psu.id"
           />
         </el-select>
@@ -330,9 +330,11 @@ const savePrompt = async () => {
       
       // 更新现有Prompt
       await promptApi.updatePromptFragment(currentPrompt.value.id, {
+        baseVersionNo: psuList.value.find(item => item.id === selectedPsuId.value)?.versionNo,
         content: currentPrompt.value.content
       })
       ElMessage.success('更新成功')
+      await loadPsuList()
     } else {
       // 创建新Prompt
       await promptApi.createPromptFragment({

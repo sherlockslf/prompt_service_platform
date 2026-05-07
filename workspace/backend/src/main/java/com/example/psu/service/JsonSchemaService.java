@@ -59,16 +59,17 @@ public class JsonSchemaService {
      * @param changeLog 变更日志
      * @return 更新后的Schema
      */
-    public JsonSchema updateSchema(Long psuId, String schemaContent, Long userId, String changeLog) {
+    public JsonSchema updateSchema(Long psuId, Integer baseVersionNo, String schemaContent, Long userId, String changeLog) {
         RequestValidationUtils.requireNonNull(psuId, "psuId");
         RequestValidationUtils.requireNonBlank(schemaContent, "schemaContent");
         Long safePsuId = Objects.requireNonNull(psuId);
         // 检查PSU是否存在
         PsuUnit psu = psuRepository.findById(safePsuId)
                 .orElseThrow(() -> new RuntimeException("PSU not found: " + safePsuId));
-        if (psu.getStatus() != PsuStatus.DRAFT) {
-            throw new RuntimeException("当前PSU为只读状态，仅草稿可编辑Schema");
+        if (psu.getStatus() == PsuStatus.ARCHIVED) {
+            throw new RuntimeException("当前PSU已归档，不允许编辑Schema");
         }
+        validateBaseVersion(psu, baseVersionNo);
         
         // 验证Schema格式
         try {
@@ -77,22 +78,24 @@ public class JsonSchemaService {
             throw new RuntimeException("Invalid JSON Schema format");
         }
         
-        // 覆盖写语义：同一PSU只保留一条Schema记录
+        // 覆盖写语义：同一PSU只保留一条Schema记录，并持续递增schema版本号
         JsonSchema schema = jsonSchemaRepository.findByPsuId(safePsuId).orElseGet(() -> {
             JsonSchema created = new JsonSchema();
             created.setPsuId(safePsuId);
             created.setCreatedAt(LocalDateTime.now());
+            created.setVersion(0);
             return created;
         });
         schema.setSchemaContent(schemaContent);
-        schema.setVersion(1); // 兼容保留字段，固定为1
+        int nextSchemaVersion = (schema.getVersion() == null ? 0 : schema.getVersion()) + 1;
+        schema.setVersion(nextSchemaVersion);
         schema.setModifiedBy(userId == null ? 0L : userId);
         schema.setChangeLog(changeLog);
 
         JsonSchema savedSchema = jsonSchemaRepository.save(schema);
         
-        // 更新PSU版本号（单字段递增）
-        psu.setVersionNo(psu.getVersionNo() + 1);
+        // 编辑Schema：PSU版本号独立递增
+        psu.setVersionNo((psu.getVersionNo() == null ? 0 : psu.getVersionNo()) + 1);
         psuRepository.save(psu);
         
         return savedSchema;
@@ -121,6 +124,19 @@ public class JsonSchemaService {
         schema.setModifiedBy(userId == null ? 0L : userId);
         schema.setChangeLog("初始化空Schema");
         return jsonSchemaRepository.save(schema);
+    }
+
+    private void validateBaseVersion(PsuUnit psu, Integer baseVersionNo) {
+        if (baseVersionNo == null) {
+            throw new RuntimeException("baseVersionNo不能为空");
+        }
+        int current = psu.getVersionNo() == null ? 0 : psu.getVersionNo();
+        if (baseVersionNo > current) {
+            throw new RuntimeException("baseVersionNo不能大于当前版本");
+        }
+        if (current - baseVersionNo > 1) {
+            throw new RuntimeException("版本已发生并发更新，请刷新后重试");
+        }
     }
 }
 

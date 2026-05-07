@@ -53,6 +53,11 @@
                 </el-tag>
               </template>
             </el-table-column>
+            <el-table-column label="标签" width="100">
+              <template #default="{ row }">
+                <el-tag :type="getPsuTagType(row.tag)">{{ getPsuTagText(row.tag) }}</el-tag>
+              </template>
+            </el-table-column>
             <el-table-column prop="updatedAt" label="更新时间" width="180">
               <template #default="{ row }">
                 {{ formatDateTime(row.updatedAt) }}
@@ -248,6 +253,11 @@
                 </el-tag>
               </template>
             </el-table-column>
+            <el-table-column label="版本标签" width="120">
+              <template #default="{ row }">
+                <el-tag :type="getPsuTagType(row.versionTag)">{{ getPsuTagText(row.versionTag) }}</el-tag>
+              </template>
+            </el-table-column>
             <el-table-column prop="submitterId" label="提交者" width="120"></el-table-column>
             <el-table-column prop="submittedAt" label="提交时间" width="180"></el-table-column>
             <el-table-column prop="gitCommitHash" label="Git提交Hash" width="180">
@@ -255,12 +265,14 @@
                 <span>{{ row.gitCommitHash || '-' }}</span>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="320">
+            <el-table-column label="操作" width="430">
               <template #default="{ row }">
                 <el-button size="small" @click="goReviewPreview(row)" :disabled="row.status !== 'CANDIDATE'">预览</el-button>
                 <el-button size="small" @click="approveVersion(row)" :disabled="row.status !== 'CANDIDATE'">通过</el-button>
                 <el-button size="small" type="danger" @click="rejectVersion(row)" :disabled="row.status !== 'CANDIDATE'">拒绝</el-button>
                 <el-button size="small" type="success" @click="registerGitCommit(row)" :disabled="row.status !== 'FORMAL'">登记Git</el-button>
+                <el-button size="small" type="success" plain @click="setVersionTag(row, 'FORMAL')">设为正式</el-button>
+                <el-button size="small" type="info" plain @click="setVersionTag(row, 'PREVIEW')">设为预览</el-button>
                 <el-button size="small" @click="compareVersion(row)">对比</el-button>
                 <el-button size="small" type="warning" @click="rollbackVersion(row)">回滚</el-button>
                 <el-button size="small" @click="viewCode(row)" v-if="row.codeContent">查看代码</el-button>
@@ -709,6 +721,33 @@ const getPsuStatusText = (status) => {
   }
 }
 
+const getPsuTagType = (tag) => {
+  switch (tag) {
+    case 'FORMAL': return 'success'
+    case 'PREVIEW': return 'warning'
+    default: return 'info'
+  }
+}
+
+const getPsuTagText = (tag) => {
+  switch (tag) {
+    case 'FORMAL': return '正式版'
+    case 'PREVIEW': return '预览版'
+    default: return '-'
+  }
+}
+
+const setVersionTag = async (review, tag) => {
+  try {
+    await versionReviewApi.assignVersionTag(review.id, { tag })
+    ElMessage.success(tag === 'FORMAL' ? '已设为正式版' : '已设为预览版')
+    await loadVersionReviews()
+    await loadPsus()
+  } catch (error) {
+    ElMessage.error(error.response?.data?.message || '设置版本标签失败')
+  }
+}
+
 // 创建PSU
 const createPsu = async () => {
   try {
@@ -804,16 +843,19 @@ const formatDateTime = (dateTime) => {
 
 // 保存Schema
 const saveSchema = async () => {
-  if (!isPsuDraft(selectedPsuId.value)) {
-    ElMessage.warning('仅草稿状态允许编辑Schema')
+  const psu = getPsuById(selectedPsuId.value)
+  if (!psu) {
+    ElMessage.warning('请先选择PSU')
     return
   }
   try {
     await api.put(`/schemas/${selectedPsuId.value}`, {
+      baseVersionNo: psu.versionNo,
       schemaContent: schemaForm.schemaContent,
       changeLog: schemaForm.changeLog
     })
     ElMessage.success('Schema保存成功')
+    await loadPsus()
   } catch (error) {
     console.error('保存Schema失败:', error)
     ElMessage.error('保存Schema失败')
@@ -956,16 +998,19 @@ const editPromptFragment = (fragment) => {
 
 // 保存Prompt片段
 const savePromptFragment = async () => {
-  if (!isPsuDraft(selectedPromptPsuId.value)) {
-    ElMessage.warning('仅草稿状态允许编辑Prompt')
+  const psu = getPsuById(selectedPromptPsuId.value)
+  if (!psu) {
+    ElMessage.warning('请先选择PSU')
     return
   }
   try {
     await api.put(`/prompts/${editingPromptFragment.value.id}`, {
+      baseVersionNo: psu.versionNo,
       content: editingPromptFragment.value.content
     })
     ElMessage.success('Prompt片段保存成功')
     showEditPromptDialog.value = false
+    await loadPsus()
     loadPromptFragments()
   } catch (error) {
     console.error('保存Prompt片段失败:', error)

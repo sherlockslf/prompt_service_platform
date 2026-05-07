@@ -66,7 +66,7 @@ public class PromptService {
         // 检查PSU是否存在
         PsuUnit psu = psuRepository.findById(safePsuId)
                 .orElseThrow(() -> new RuntimeException("PSU not found: " + safePsuId));
-        assertDraftEditable(psu);
+        assertEditable(psu);
         
         // 检查fragmentKey是否已存在
         Optional<PromptFragment> existingFragment = promptFragmentRepository
@@ -84,7 +84,9 @@ public class PromptService {
         fragment.setType(request.getType());
         fragment.setSortOrder(request.getSortOrder());
         
-        return promptFragmentRepository.save(fragment);
+        PromptFragment saved = promptFragmentRepository.save(fragment);
+        bumpPromptVersion(psu);
+        return saved;
     }
     
     /**
@@ -97,7 +99,7 @@ public class PromptService {
      * @param userId 用户ID
      * @return 更新后的片段
      */
-    public PromptFragment updatePromptFragment(Long fragmentId, String content, Long userId) {
+    public PromptFragment updatePromptFragment(Long fragmentId, Integer baseVersionNo, String content, Long userId) {
         RequestValidationUtils.requireNonNull(fragmentId, "fragmentId");
         RequestValidationUtils.requireNonBlank(content, "content");
         Long safeFragmentId = Objects.requireNonNull(fragmentId);
@@ -108,7 +110,8 @@ public class PromptService {
         Long fragmentPsuId = Objects.requireNonNull(fragment.getPsuId());
         PsuUnit psu = psuRepository.findById(fragmentPsuId)
                 .orElseThrow(() -> new RuntimeException("PSU not found: " + fragmentPsuId));
-        assertDraftEditable(psu);
+        assertEditable(psu);
+        validateBaseVersion(psu, baseVersionNo);
 
         // 已定版的Prompt（editable=false）所有人不可修改
         if (!fragment.getEditable()) {
@@ -120,10 +123,8 @@ public class PromptService {
         
         PromptFragment savedFragment = promptFragmentRepository.save(fragment);
         
-        // 更新PSU版本号（单字段递增）
-        // 获取对应的PSU并更新版本
-        psu.setVersionNo(psu.getVersionNo() + 1); // 版本号递增
-        psuRepository.save(psu);
+        // 编辑Prompt：版本号递增并切换预览标签
+        bumpPromptVersion(psu);
         
         return savedFragment;
     }
@@ -143,7 +144,7 @@ public class PromptService {
         Long fragmentPsuId = Objects.requireNonNull(fragment.getPsuId());
         PsuUnit psu = psuRepository.findById(fragmentPsuId)
                 .orElseThrow(() -> new RuntimeException("PSU not found: " + fragmentPsuId));
-        assertDraftEditable(psu);
+        assertEditable(psu);
 
         // 已定版的Prompt不能删除
         if (!fragment.getEditable()) {
@@ -151,6 +152,7 @@ public class PromptService {
         }
         
         promptFragmentRepository.deleteById(safeFragmentId);
+        bumpPromptVersion(psu);
     }
     
     /**
@@ -169,7 +171,7 @@ public class PromptService {
         Long fragmentPsuId = Objects.requireNonNull(fragment.getPsuId());
         PsuUnit psu = psuRepository.findById(fragmentPsuId)
                 .orElseThrow(() -> new RuntimeException("PSU not found: " + fragmentPsuId));
-        assertDraftEditable(psu);
+        assertEditable(psu);
 
         // 如果已经定版，不允许重复定版
         if (!fragment.getEditable()) {
@@ -179,7 +181,9 @@ public class PromptService {
         // 定版：设置editable=false
         fragment.setEditable(false);
         
-        return promptFragmentRepository.save(fragment);
+        PromptFragment saved = promptFragmentRepository.save(fragment);
+        bumpPromptVersion(psu);
+        return saved;
     }
     
     /**
@@ -218,11 +222,28 @@ public class PromptService {
         return assembleFullPromptWithMissingVars(fragments, variables).renderedPrompt();
     }
 
-    private void assertDraftEditable(PsuUnit psu) {
-        // 生命周期约束：仅草稿允许编辑Prompt内容
-        if (psu.getStatus() != PsuStatus.DRAFT) {
-            throw new RuntimeException("当前PSU为只读状态，仅草稿可编辑");
+    private void assertEditable(PsuUnit psu) {
+        if (psu.getStatus() == PsuStatus.ARCHIVED) {
+            throw new RuntimeException("当前PSU已归档，不允许编辑");
         }
+    }
+
+    private void validateBaseVersion(PsuUnit psu, Integer baseVersionNo) {
+        if (baseVersionNo == null) {
+            throw new RuntimeException("baseVersionNo不能为空");
+        }
+        int current = psu.getVersionNo() == null ? 0 : psu.getVersionNo();
+        if (baseVersionNo > current) {
+            throw new RuntimeException("baseVersionNo不能大于当前版本");
+        }
+        if (current - baseVersionNo > 1) {
+            throw new RuntimeException("版本已发生并发更新，请刷新后重试");
+        }
+    }
+
+    private void bumpPromptVersion(PsuUnit psu) {
+        psu.setVersionNo((psu.getVersionNo() == null ? 0 : psu.getVersionNo()) + 1);
+        psuRepository.save(psu);
     }
 
     private RenderResult assembleFullPromptWithMissingVars(List<PromptFragment> fragments, Map<String, Object> variables) {

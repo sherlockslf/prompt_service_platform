@@ -10,7 +10,7 @@
 
       <div class="filters">
         <el-select v-model="filterPsuId" placeholder="选择PSU" clearable style="width: 260px" @change="loadReleases">
-          <el-option v-for="psu in psuList" :key="psu.id" :label="`${psu.name} (v${psu.versionNo ?? 1})`" :value="psu.id" />
+          <el-option v-for="psu in psuList" :key="psu.id" :label="`${psu.name} (v${psu.versionNo ?? 1}, ${psu.tag === 'FORMAL' ? '正式版' : '预览版'})`" :value="psu.id" />
         </el-select>
         <el-select v-model="filterEnv" placeholder="环境" clearable style="width: 160px" @change="loadReleases">
           <el-option label="DEV" value="DEV" />

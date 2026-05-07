@@ -53,6 +53,7 @@ public class PsuService {
         psu.setDescription(request.getDescription());
         psu.setStatus(PsuStatus.DRAFT);
         psu.setCreatorId(creatorId);
+        psu.setVersionNo(1);
         
         return psuRepository.save(psu);
     }

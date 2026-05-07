@@ -4,6 +4,7 @@ import com.example.psu.dto.request.ReviewRequest;
 import com.example.psu.dto.request.RollbackVersionRequest;
 import com.example.psu.dto.response.VersionCompareResponse;
 import com.example.psu.entity.VersionReview;
+import com.example.psu.enums.PsuTag;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -26,5 +27,7 @@ public interface VersionReviewService {
     VersionCompareResponse compareVersions(Long psuId, Integer fromVersionNo, Integer toVersionNo);
 
     VersionReview rollbackVersion(Long psuId, RollbackVersionRequest request, Long operatorId);
+
+    VersionReview assignVersionTag(Long reviewId, PsuTag tag, Long operatorId);
 }
 

@@ -3,18 +3,18 @@ spring:
     name: psu-platform
   
   # 数据库配置 生产环境
-  datasource:
-    driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://rm-bp1v0aoc564umyqbp.mysql.rds.aliyuncs.com:3306/aim_product_ai?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
-    username: aim_user
-    password: Aim@2026
-
-  # 开发配置atC
   # datasource:
   #   driver-class-name: com.mysql.cj.jdbc.Driver
-  #   url: jdbc:mysql://127.0.0.1:3306/psu?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
-  #   username: root
-  #   password: a123456
+  #   url: jdbc:mysql://rm-bp1v0aoc564umyqbp.mysql.rds.aliyuncs.com:3306/aim_product_ai?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
+  #   username: aim_user
+  #   password: Aim@2026
+
+  # 开发配置atC
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://127.0.0.1:3306/psu?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: a123456
     
   # JPA配置
   jpa:

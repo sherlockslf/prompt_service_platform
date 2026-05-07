@@ -179,7 +179,6 @@ public class DataInitializer implements CommandLineRunner {
                     needUpdate = true;
                 }
             }
-
             if (needUpdate) {
                 if (composition.getUpdatedBy() == null) {
                     composition.setUpdatedBy(psu.getCreatorId() == null ? 0L : psu.getCreatorId());

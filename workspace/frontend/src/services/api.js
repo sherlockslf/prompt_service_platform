@@ -192,6 +192,14 @@ export const versionReviewApi = {
     return api.post(`/versions/${reviewId}/git-commit`, data);
   }
   ,
+  // 手动指定版本标签（FORMAL/PREVIEW）
+  assignVersionTag: (reviewId, data) => {
+    if (!isValidPsuId(reviewId)) {
+      return Promise.reject(new Error(`Invalid Review ID: ${reviewId}`));
+    }
+    return api.post(`/versions/${reviewId}/tag`, data);
+  }
+  ,
   // 审核预览：按参数集渲染当前待审编排
   previewByParamSet: (reviewId) => api.get(`/versions/${reviewId}/preview`)
 }

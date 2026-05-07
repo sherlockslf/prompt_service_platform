@@ -13,7 +13,7 @@
           <el-option
             v-for="psu in psuList"
             :key="psu.id"
-            :label="`${psu.name} (v${psu.versionNo ?? 1})`"
+            :label="`${psu.name} (v${psu.versionNo ?? 1}, ${psu.tag === 'FORMAL' ? '正式版' : '预览版'})`"
             :value="psu.id"
           />
         </el-select>
@@ -309,10 +309,12 @@ const saveEditedFragment = async () => {
   
   try {
     await promptApi.updatePromptFragment(currentFragment.value.id, {
+      baseVersionNo: psuList.value.find(item => item.id === selectedPsuId.value)?.versionNo,
       content: currentFragment.value.content
     })
     ElMessage.success('保存成功')
     editDialogVisible.value = false
+    await loadPsuList()
     await loadPromptFragments() // 重新加载列表
   } catch (error) {
     console.error('保存Prompt片段失败:', error)

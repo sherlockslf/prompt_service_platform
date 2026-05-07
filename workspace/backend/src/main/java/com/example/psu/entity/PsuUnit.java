@@ -42,7 +42,7 @@ public class PsuUnit {
     private Long creatorId;            // 创建者ID（研发）
     
     @Column(nullable = false)
-    private Integer versionNo = 1;     // 版本号（单字段递增）
+    private Integer versionNo = 1;     // PSU版本号（独立递增）
     
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;   // 创建时间

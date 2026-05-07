@@ -54,8 +54,8 @@ public class ParamSetService {
         // 先校验PSU存在，再执行覆盖写。
         PsuUnit psu = psuRepository.findById(safePsuId)
             .orElseThrow(() -> new RuntimeException("PSU not found: " + safePsuId));
-        if (psu.getStatus() != PsuStatus.DRAFT) {
-            throw new RuntimeException("当前PSU为只读状态，仅草稿可编辑参数集");
+        if (psu.getStatus() == PsuStatus.ARCHIVED) {
+            throw new RuntimeException("当前PSU已删除，不允许编辑参数集");
         }
         try {
             objectMapper.readTree(paramSetContent);

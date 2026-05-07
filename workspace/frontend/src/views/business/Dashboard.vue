@@ -56,12 +56,17 @@
                 </el-tag>
               </template>
             </el-table-column>
+            <el-table-column label="标签" width="100">
+              <template #default="{ row }">
+                <el-tag :type="getPsuTagType(row.tag)">{{ getPsuTagText(row.tag) }}</el-tag>
+              </template>
+            </el-table-column>
             <el-table-column label="操作" min-width="360">
               <template #default="{ row }">
                 <el-button size="small" @click="viewSchema(row)">查看Schema</el-button>
                 <el-button size="small" @click="openEditPsuDialog(row)" :disabled="row.status !== 'DRAFT'">编辑</el-button>
                 <el-button size="small" type="danger" @click="archivePsu(row)" :disabled="row.status === 'FORMAL'">归档</el-button>
-                <el-button size="small" type="success" @click="submitVersionByPsu(row)" :disabled="row.status !== 'DRAFT'">提交审核(发布)</el-button>
+                <el-button size="small" type="success" @click="submitVersionByPsu(row)" :disabled="row.status === 'ARCHIVED' || row.status === 'CANDIDATE'">提交审核(发布)</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -660,6 +665,22 @@ const getPsuStatusText = (status) => {
   }
 }
 
+const getPsuTagType = (tag) => {
+  switch (tag) {
+    case 'FORMAL': return 'success'
+    case 'PREVIEW': return 'warning'
+    default: return 'info'
+  }
+}
+
+const getPsuTagText = (tag) => {
+  switch (tag) {
+    case 'FORMAL': return '正式版'
+    case 'PREVIEW': return '预览版'
+    default: return '-'
+  }
+}
+
 // 格式化日期时间
 const formatDateTime = (dateTime) => {
   if (!dateTime) return '-'
@@ -748,8 +769,9 @@ const savePrompt = async () => {
     ElMessage.warning('Prompt已定版，不允许修改')
     return
   }
-  if (!isPsuDraft(selectedPsuId.value)) {
-    ElMessage.warning('仅草稿状态允许编辑Prompt')
+  const psu = psus.value.find(item => item.id === selectedPsuId.value)
+  if (!psu || psu.status === 'ARCHIVED') {
+    ElMessage.warning('当前PSU状态不允许编辑Prompt')
     return
   }
   
@@ -757,6 +779,7 @@ const savePrompt = async () => {
     if (currentPromptFragmentId.value) {
       // 更新现有的Prompt片段
       await promptApi.updatePromptFragment(currentPromptFragmentId.value, {
+        baseVersionNo: psu.versionNo,
         content: promptForm.promptContent
       })
     } else {
@@ -778,6 +801,7 @@ const savePrompt = async () => {
       }
     }
     ElMessage.success('Prompt保存成功')
+    await loadPsus()
   } catch (error) {
     console.error('保存Prompt失败:', error)
     ElMessage.error('保存Prompt失败')
@@ -790,8 +814,9 @@ const finalizePrompt = async () => {
     ElMessage.warning('请先加载Prompt片段')
     return
   }
-  if (!isPsuDraft(selectedPsuId.value)) {
-    ElMessage.warning('仅草稿状态允许定版')
+  const psu = psus.value.find(item => item.id === selectedPsuId.value)
+  if (!psu || psu.status === 'ARCHIVED') {
+    ElMessage.warning('当前PSU状态不允许定版')
     return
   }
   
@@ -830,16 +855,19 @@ const saveSchemaFromEditor = async () => {
     ElMessage.warning('请先选择PSU')
     return
   }
-  if (!isPsuDraft(selectedSchemaPsuId.value)) {
-    ElMessage.warning('仅草稿状态允许编辑Schema')
+  const psu = psus.value.find(item => item.id === selectedSchemaPsuId.value)
+  if (!psu || psu.status === 'ARCHIVED') {
+    ElMessage.warning('当前PSU状态不允许编辑Schema')
     return
   }
   try {
     await schemaApi.updateSchema(selectedSchemaPsuId.value, {
+      baseVersionNo: psu.versionNo,
       schemaContent: schemaEditForm.schemaContent,
       changeLog: schemaEditForm.changeLog
     })
     ElMessage.success('Schema保存成功')
+    await loadPsus()
   } catch (error) {
     console.error('保存Schema失败:', error)
     ElMessage.error('保存Schema失败')
@@ -883,8 +911,9 @@ const submitVersion = async () => {
     ElMessage.warning('请选择PSU')
     return
   }
-  if (!isPsuDraft(selectedVersionPsuId.value)) {
-    ElMessage.warning('仅草稿状态允许提交审核')
+  const psu = psus.value.find(item => item.id === selectedVersionPsuId.value)
+  if (!psu || psu.status === 'ARCHIVED' || psu.status === 'CANDIDATE') {
+    ElMessage.warning('当前状态不允许提交审核')
     return
   }
   
@@ -904,8 +933,8 @@ const submitVersion = async () => {
 
 // 行内发布入口：直接按当前PSU提交版本审核
 const submitVersionByPsu = async (psu) => {
-  if (psu.status !== 'DRAFT') {
-    ElMessage.warning('仅草稿状态允许提交审核')
+  if (psu.status === 'ARCHIVED' || psu.status === 'CANDIDATE') {
+    ElMessage.warning('当前状态不允许提交审核')
     return
   }
   try {

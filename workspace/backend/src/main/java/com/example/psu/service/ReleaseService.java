@@ -10,12 +10,12 @@ import com.example.psu.entity.PromptLiveVersion;
 import com.example.psu.entity.PromptRelease;
 import com.example.psu.entity.PromptReleaseRule;
 import com.example.psu.entity.PromptRollbackRecord;
+import com.example.psu.entity.PsuReleaseVersion;
 import com.example.psu.entity.PsuUnit;
-import com.example.psu.enums.PsuStatus;
+import com.example.psu.enums.PsuTag;
 import com.example.psu.enums.ReleaseRuleType;
 import com.example.psu.enums.ReleaseStatus;
 import com.example.psu.enums.ReleaseType;
-import com.example.psu.enums.ReviewStatus;
 import com.example.psu.enums.RuleOperator;
 import com.example.psu.exception.RequestValidationUtils;
 import com.example.psu.repository.PromptCompositionRevisionRepository;
@@ -23,6 +23,7 @@ import com.example.psu.repository.PromptLiveVersionRepository;
 import com.example.psu.repository.PromptReleaseRepository;
 import com.example.psu.repository.PromptReleaseRuleRepository;
 import com.example.psu.repository.PromptRollbackRecordRepository;
+import com.example.psu.repository.PsuReleaseVersionRepository;
 import com.example.psu.repository.PsuRepository;
 import com.example.psu.repository.VersionReviewRepository;
 import org.springframework.data.domain.Page;
@@ -50,6 +51,7 @@ public class ReleaseService {
     private final PromptCompositionRevisionRepository promptCompositionRevisionRepository;
     private final PsuRepository psuRepository;
     private final VersionReviewRepository versionReviewRepository;
+    private final PsuReleaseVersionRepository psuReleaseVersionRepository;
 
     public ReleaseService(
         PromptReleaseRepository promptReleaseRepository,
@@ -58,7 +60,8 @@ public class ReleaseService {
         PromptRollbackRecordRepository promptRollbackRecordRepository,
         PromptCompositionRevisionRepository promptCompositionRevisionRepository,
         PsuRepository psuRepository,
-        VersionReviewRepository versionReviewRepository
+        VersionReviewRepository versionReviewRepository,
+        PsuReleaseVersionRepository psuReleaseVersionRepository
     ) {
         this.promptReleaseRepository = promptReleaseRepository;
         this.promptReleaseRuleRepository = promptReleaseRuleRepository;
@@ -67,6 +70,7 @@ public class ReleaseService {
         this.promptCompositionRevisionRepository = promptCompositionRevisionRepository;
         this.psuRepository = psuRepository;
         this.versionReviewRepository = versionReviewRepository;
+        this.psuReleaseVersionRepository = psuReleaseVersionRepository;
     }
 
     public Page<PromptRelease> getReleases(Long psuId, String environment, Pageable pageable) {
@@ -95,18 +99,17 @@ public class ReleaseService {
         Long safePsuId = Objects.requireNonNull(request.getPsuId());
         PsuUnit psu = psuRepository.findById(safePsuId)
             .orElseThrow(() -> new IllegalArgumentException("PSU不存在: " + safePsuId));
-        if (psu.getStatus() != PsuStatus.FORMAL) {
-            throw new IllegalArgumentException("仅正式版本PSU允许创建发布单");
-        }
+        psuReleaseVersionRepository.findTopByPsuIdAndTagOrderByUpdatedAtDesc(safePsuId, PsuTag.FORMAL)
+            .orElseThrow(() -> new IllegalArgumentException("未找到正式版本，不允许创建发布单"));
         promptCompositionRevisionRepository
             .findByCompositionIdAndRevisionNo(request.getTargetCompositionId(), request.getTargetRevisionNo())
             .orElseThrow(() -> new IllegalArgumentException("目标快照不存在"));
-        boolean approvedTarget = versionReviewRepository.existsByPsuIdAndCompositionIdAndCompositionRevisionNoAndStatus(
+        boolean approvedTarget = psuReleaseVersionRepository.findByPsuIdAndPromptIdAndPromptVersionNoAndTag(
             safePsuId,
             request.getTargetCompositionId(),
             request.getTargetRevisionNo(),
-            ReviewStatus.FORMAL
-        );
+            PsuTag.FORMAL
+        ).isPresent();
         if (!approvedTarget) {
             throw new IllegalArgumentException("目标版本未审核通过，不允许发布");
         }
@@ -308,11 +311,8 @@ public class ReleaseService {
         }
         Long safePsuId = Objects.requireNonNull(request.getPsuId());
         String safeEnvironment = request.getEnvironment().trim().toUpperCase();
-        PsuUnit psu = psuRepository.findById(safePsuId)
-            .orElseThrow(() -> new IllegalArgumentException("PSU不存在"));
-        if (psu.getStatus() != PsuStatus.FORMAL) {
-            throw new IllegalArgumentException("仅正式版本PSU可对外提供服务");
-        }
+        psuReleaseVersionRepository.findTopByPsuIdAndTagOrderByUpdatedAtDesc(safePsuId, PsuTag.FORMAL)
+            .orElseThrow(() -> new IllegalArgumentException("未找到正式版本，暂不可对外提供服务"));
         PromptLiveVersion live = promptLiveVersionRepository
             .findByPsuIdAndEnvironment(safePsuId, safeEnvironment)
             .orElseThrow(() -> new IllegalArgumentException("未找到生效版本"));
