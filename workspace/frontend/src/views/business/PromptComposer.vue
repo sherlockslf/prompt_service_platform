@@ -9,8 +9,12 @@
             v-model="selectedPsuId"
             filterable
             clearable
+            remote
+            reserve-keyword
             class="psu-selector"
             placeholder="请选择PSU"
+            :remote-method="searchPsuByName"
+            :loading="loadingPsuOptions"
             @change="handlePsuChange"
           >
             <el-option
@@ -213,6 +217,8 @@ const psuId = computed(() => {
 })
 const selectedPsuId = ref(psuId.value)
 const availablePsus = ref([])
+const loadingPsuOptions = ref(false)
+let searchPsuDebounceTimer = null
 
 const content = ref('')
 const compositionId = ref(null)
@@ -245,7 +251,8 @@ const modelTestOutput = ref('')
 const modelTestError = ref('')
 const editorRef = ref(null)
 
-const isReadonly = computed(() => status.value !== 'DRAFT')
+// 已取消按版本状态锁定编辑，仅归档态不可编辑
+const isReadonly = computed(() => status.value === 'ARCHIVED')
 
 const statusTagType = computed(() => {
   const map = { DRAFT: 'success', CANDIDATE: 'warning', FORMAL: 'primary', ARCHIVED: 'info' }
@@ -264,6 +271,9 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  if (searchPsuDebounceTimer) {
+    clearTimeout(searchPsuDebounceTimer)
+  }
   window.removeEventListener('beforeunload', handleBeforeUnload)
 })
 
@@ -318,8 +328,10 @@ async function loadPsuName() {
 }
 
 async function loadAvailablePsus() {
+  loadingPsuOptions.value = true
   try {
-    const res = await psuApi.getPsus(1, 100)
+    // 默认仅加载10条，作为下拉初始候选
+    const res = await psuApi.getPsus(1, 10)
     availablePsus.value = Array.isArray(res.data?.content) ? res.data.content : []
     if (!selectedPsuId.value && availablePsus.value.length === 1) {
       selectedPsuId.value = availablePsus.value[0].id
@@ -327,7 +339,27 @@ async function loadAvailablePsus() {
   } catch (e) {
     console.error('Failed to load PSU list', e)
     availablePsus.value = []
+  } finally {
+    loadingPsuOptions.value = false
   }
+}
+
+function searchPsuByName(keyword) {
+  if (searchPsuDebounceTimer) {
+    clearTimeout(searchPsuDebounceTimer)
+  }
+  searchPsuDebounceTimer = setTimeout(async () => {
+    loadingPsuOptions.value = true
+    try {
+      const res = await psuApi.getPsus(1, 10, keyword || '')
+      availablePsus.value = Array.isArray(res.data?.content) ? res.data.content : []
+    } catch (e) {
+      console.error('PSU name search failed', e)
+      availablePsus.value = []
+    } finally {
+      loadingPsuOptions.value = false
+    }
+  }, 250)
 }
 
 async function initializeBySelectedPsu() {
@@ -826,7 +858,7 @@ async function handleSubmit() {
   }
 
   try {
-    await ElMessageBox.confirm('提交后将锁定编排，业务侧不可再修改，确认提交？', '确认提交', {
+    await ElMessageBox.confirm('确认提交当前编排进行审核？', '确认提交', {
       confirmButtonText: '确认提交',
       cancelButtonText: '取消',
       type: 'warning'
@@ -843,7 +875,7 @@ async function handleSubmit() {
       return
     }
     await compositionApi.submit(selectedPsuId.value)
-    ElMessage.success('提交成功，编排已锁定')
+    ElMessage.success('提交成功')
     status.value = 'CANDIDATE'
     hasUnsavedChanges.value = false
     const res = await compositionApi.getComposition(selectedPsuId.value)
@@ -885,15 +917,17 @@ function formatTime(timeStr) {
   height: 100vh;
   display: flex;
   flex-direction: column;
+  color: var(--neo-text);
 }
 
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid #e4e7ed;
-  background: #fff;
+  border-bottom: 1px solid var(--neo-border);
+  background: linear-gradient(120deg, rgba(15, 35, 58, 0.92), rgba(12, 23, 41, 0.86));
   padding: 0 20px;
+  backdrop-filter: blur(8px);
 }
 
 .header-left {
@@ -919,7 +953,7 @@ function formatTime(timeStr) {
 
 .update-time {
   font-size: 12px;
-  color: #909399;
+  color: var(--neo-text-dim);
 }
 
 .main-container {
@@ -928,8 +962,8 @@ function formatTime(timeStr) {
 }
 
 .left-panel {
-  background: #fafafa;
-  border-right: 1px solid #e4e7ed;
+  background: rgba(10, 23, 41, 0.76);
+  border-right: 1px solid var(--neo-border);
   overflow-y: auto;
   padding: 16px;
 }
@@ -955,8 +989,8 @@ function formatTime(timeStr) {
 .dataset-collapsed-tip {
   padding: 8px;
   font-size: 12px;
-  color: #909399;
-  background: #f5f7fa;
+  color: var(--neo-text-dim);
+  background: rgba(6, 16, 30, 0.74);
   border-radius: 4px;
 }
 
@@ -966,8 +1000,8 @@ function formatTime(timeStr) {
 }
 
 .right-panel {
-  background: #fafafa;
-  border-left: 1px solid #e4e7ed;
+  background: rgba(10, 23, 41, 0.76);
+  border-left: 1px solid var(--neo-border);
   overflow-y: auto;
   padding: 16px;
   display: flex;
@@ -980,13 +1014,22 @@ function formatTime(timeStr) {
   flex-direction: column;
   gap: 8px;
   padding-top: 16px;
-  border-top: 1px solid #e4e7ed;
+  border-top: 1px solid var(--neo-border);
+}
+
+.action-bar :deep(.el-button) {
+  width: 100%;
+  min-height: 48px;
+  margin: 0 !important;
+  border-radius: 10px;
+  font-size: 20px;
+  font-weight: 700;
 }
 
 .param-set-panel {
   margin-top: 16px;
   padding-top: 12px;
-  border-top: 1px dashed #dcdfe6;
+  border-top: 1px dashed rgba(95, 158, 199, 0.35);
 }
 
 .param-set-panel h4 {
@@ -997,7 +1040,7 @@ function formatTime(timeStr) {
 .preview-panel {
   margin-top: 16px;
   padding-top: 12px;
-  border-top: 1px dashed #dcdfe6;
+  border-top: 1px dashed rgba(95, 158, 199, 0.35);
 }
 
 .preview-panel h4 {
@@ -1008,7 +1051,7 @@ function formatTime(timeStr) {
 .test-result-panel {
   margin-top: 16px;
   padding-top: 12px;
-  border-top: 1px dashed #dcdfe6;
+  border-top: 1px dashed rgba(95, 158, 199, 0.35);
 }
 
 .test-result-panel h4 {
@@ -1030,23 +1073,23 @@ function formatTime(timeStr) {
 }
 
 .chat-item {
-  border: 1px solid #e4e7ed;
+  border: 1px solid var(--neo-border);
   border-radius: 6px;
   padding: 10px;
 }
 
 .chat-item.user {
-  background: #f5f7fa;
+  background: rgba(6, 16, 30, 0.72);
 }
 
 .chat-item.assistant {
-  background: #ecf5ff;
-  border-color: #b3d8ff;
+  background: rgba(13, 36, 56, 0.82);
+  border-color: var(--neo-border-strong);
 }
 
 .chat-role {
   font-size: 12px;
-  color: #909399;
+  color: var(--neo-text-dim);
   margin-bottom: 6px;
 }
 
@@ -1054,7 +1097,7 @@ function formatTime(timeStr) {
   white-space: pre-wrap;
   word-break: break-word;
   font-size: 13px;
-  color: #303133;
+  color: var(--neo-text);
 }
 
 .dataset-preview-list,
@@ -1074,11 +1117,34 @@ function formatTime(timeStr) {
   margin: 0;
   padding: 8px;
   border-radius: 4px;
-  background: #f5f7fa;
+  background: rgba(6, 16, 30, 0.74);
   white-space: pre-wrap;
   word-break: break-all;
   font-size: 12px;
   max-height: 220px;
   overflow-y: auto;
+  color: #c7f4ff;
+}
+
+:deep(.el-input__wrapper),
+:deep(.el-textarea__inner),
+:deep(.el-select__wrapper) {
+  background: rgba(6, 16, 30, 0.88) !important;
+  box-shadow: inset 0 0 0 1px var(--neo-border) !important;
+  color: var(--neo-text) !important;
+}
+
+:deep(.el-button--primary) {
+  border: none !important;
+  background: linear-gradient(110deg, var(--neo-accent), var(--neo-accent-2)) !important;
+  color: #071120 !important;
+  font-weight: 700;
+}
+
+:deep(.el-button--warning) {
+  border: none !important;
+  background: linear-gradient(110deg, #ffd35b, #ff9f4d) !important;
+  color: #1d1002 !important;
+  font-weight: 700;
 }
 </style>

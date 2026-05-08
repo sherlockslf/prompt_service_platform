@@ -70,7 +70,10 @@
     </div>
 
     <div class="history-panel">
-      <el-divider>运行历史（最近50条）</el-divider>
+      <div class="history-header">
+        <span class="history-title">运行历史</span>
+        <span class="history-meta">最近50条</span>
+      </div>
       <el-table :data="runHistory" size="small" style="width: 100%">
         <el-table-column prop="runId" label="Run ID" width="90" />
         <el-table-column prop="datasetId" label="数据集ID" width="100" />
@@ -273,46 +276,83 @@ function resolveMergedStatus(totalCases, failedCases) {
 <style scoped>
 .test-dataset-runner {
   padding: 8px 0;
+  color: var(--neo-text);
 }
 
 .history-panel {
   margin-top: 8px;
 }
 
+.history-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin: 8px 0 10px 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(95, 158, 199, 0.25);
+}
+
+.history-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--neo-text);
+  line-height: 1;
+}
+
+.history-meta {
+  font-size: 12px;
+  color: var(--neo-text-dim);
+  line-height: 1;
+}
+
 .result-summary {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .error-text {
-  color: #f56c6c;
+  color: #ff8ea4;
   font-size: 12px;
 }
 
 .detail-content h5 {
   margin: 12px 0 6px 0;
   font-size: 13px;
-  color: #303133;
+  color: var(--neo-text);
 }
 
 .json-block, .prompt-block, .output-block {
-  background: #f5f7fa;
+  background: rgba(6, 16, 30, 0.82);
+  border: 1px solid rgba(95, 158, 199, 0.25);
   padding: 12px;
-  border-radius: 4px;
+  border-radius: 10px;
   font-size: 12px;
   white-space: pre-wrap;
   word-break: break-all;
   max-height: 200px;
   overflow-y: auto;
   margin: 0;
+  color: #d9f2ff;
 }
 
 .error-block {
   margin-top: 12px;
   padding: 8px 12px;
-  background: #fef0f0;
-  border-radius: 4px;
-  color: #f56c6c;
+  background: rgba(138, 48, 73, 0.2);
+  border: 1px solid rgba(255, 142, 164, 0.35);
+  border-radius: 10px;
+  color: #ffc8d3;
   font-size: 12px;
+}
+
+:deep(.el-divider__text) {
+  background: transparent !important;
+  color: var(--neo-text) !important;
+}
+
+:deep(.el-divider--horizontal) {
+  border-top-color: rgba(95, 158, 199, 0.25) !important;
 }
 </style>

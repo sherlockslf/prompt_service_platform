@@ -27,7 +27,13 @@ export const authApi = {
 
 export const psuApi = {
   // 分页获取PSU列表
-  getPsus: (page = 1, size = 10) => api.get('/psus', { params: { page, size } }),
+  getPsus: (page = 1, size = 10, name = '') => {
+    const params = { page, size }
+    if (name && String(name).trim()) {
+      params.name = String(name).trim()
+    }
+    return api.get('/psus', { params })
+  },
   // 根据数据库ID获取PSU
   getPsuById: (id) => api.get(`/psus/${id}`),
   // 根据PSU ID（全局唯一ID）获取PSU

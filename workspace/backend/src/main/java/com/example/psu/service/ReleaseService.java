@@ -16,11 +16,16 @@ import com.example.psu.dto.request.ReleaseRuleRequest;
 import com.example.psu.dto.request.ResolvePromptRequest;
 import com.example.psu.dto.request.ReviewReleaseRequest;
 import com.example.psu.dto.request.RollbackReleaseRequest;
+import com.example.psu.dto.response.PromptSchemaResolveResponse;
 import com.example.psu.dto.response.ResolvePromptResponse;
+import com.example.psu.entity.JsonSchema;
+import com.example.psu.entity.PromptCompositionRevision;
 import com.example.psu.entity.PromptLiveVersion;
 import com.example.psu.entity.PromptRelease;
 import com.example.psu.entity.PromptReleaseRule;
 import com.example.psu.entity.PromptRollbackRecord;
+import com.example.psu.entity.PsuReleaseVersion;
+import com.example.psu.entity.PsuUnit;
 import com.example.psu.enums.PsuTag;
 import com.example.psu.enums.ReleaseRuleType;
 import com.example.psu.enums.ReleaseStatus;
@@ -34,6 +39,7 @@ import com.example.psu.repository.PromptReleaseRuleRepository;
 import com.example.psu.repository.PromptRollbackRecordRepository;
 import com.example.psu.repository.PsuReleaseVersionRepository;
 import com.example.psu.repository.PsuRepository;
+import com.example.psu.repository.JsonSchemaRepository;
 
 /**
  * 发布域服务
@@ -47,6 +53,7 @@ public class ReleaseService {
     private final PromptLiveVersionRepository promptLiveVersionRepository;
     private final PromptRollbackRecordRepository promptRollbackRecordRepository;
     private final PromptCompositionRevisionRepository promptCompositionRevisionRepository;
+    private final JsonSchemaRepository jsonSchemaRepository;
     private final PsuRepository psuRepository;
     private final PsuReleaseVersionRepository psuReleaseVersionRepository;
 
@@ -56,6 +63,7 @@ public class ReleaseService {
         PromptLiveVersionRepository promptLiveVersionRepository,
         PromptRollbackRecordRepository promptRollbackRecordRepository,
         PromptCompositionRevisionRepository promptCompositionRevisionRepository,
+        JsonSchemaRepository jsonSchemaRepository,
         PsuRepository psuRepository,
         PsuReleaseVersionRepository psuReleaseVersionRepository
     ) {
@@ -64,6 +72,7 @@ public class ReleaseService {
         this.promptLiveVersionRepository = promptLiveVersionRepository;
         this.promptRollbackRecordRepository = promptRollbackRecordRepository;
         this.promptCompositionRevisionRepository = promptCompositionRevisionRepository;
+        this.jsonSchemaRepository = jsonSchemaRepository;
         this.psuRepository = psuRepository;
         this.psuReleaseVersionRepository = psuReleaseVersionRepository;
     }
@@ -340,6 +349,41 @@ public class ReleaseService {
         return response;
     }
 
+    public PromptSchemaResolveResponse getPromptAndSchema(String psuId, PsuTag tag) {
+        RequestValidationUtils.requireNonNull(psuId, "psuId");
+        RequestValidationUtils.requireNonNull(tag, "tag");
+        String safePsuId = Objects.requireNonNull(psuId).trim();
+        if (safePsuId.isBlank()) {
+            throw new IllegalArgumentException("psuId不能为空");
+        }
+        PsuTag safeTag = Objects.requireNonNull(tag);
+        PsuUnit psu = psuRepository.findByPsuId(safePsuId)
+            .orElseThrow(() -> new IllegalArgumentException("PSU不存在: " + safePsuId));
+        Long psuDbId = psu.getId();
+
+        PsuReleaseVersion releaseVersion = psuReleaseVersionRepository
+            .findTopByPsuIdAndTagOrderByUpdatedAtDesc(psuDbId, safeTag)
+            .orElseThrow(() -> new IllegalArgumentException("未找到对应标签版本: psuId=" + safePsuId + ", tag=" + safeTag));
+
+        PromptCompositionRevision promptRevision = promptCompositionRevisionRepository
+            .findByCompositionIdAndRevisionNo(releaseVersion.getPromptId(), releaseVersion.getPromptVersionNo())
+            .orElseThrow(() -> new IllegalArgumentException("未找到Prompt版本快照"));
+
+        JsonSchema schema = jsonSchemaRepository.findById(releaseVersion.getJsonSchemaId())
+            .orElseThrow(() -> new IllegalArgumentException("未找到Schema版本"));
+
+        PromptSchemaResolveResponse response = new PromptSchemaResolveResponse();
+        response.setPsuId(safePsuId);
+        response.setTag(safeTag.name());
+        response.setPromptId(releaseVersion.getPromptId());
+        response.setPromptVersionNo(releaseVersion.getPromptVersionNo());
+        response.setPrompt(promptRevision.getContentSnapshot());
+        response.setJsonSchemaId(releaseVersion.getJsonSchemaId());
+        response.setJsonSchemaVersionNo(releaseVersion.getJsonSchemaVersionNo());
+        response.setJsonSchema(schema.getSchemaContent());
+        return response;
+    }
+
     private void validateCreateRequest(CreateReleaseRequest request) {
         if (request == null || request.getPsuId() == null || request.getTargetCompositionId() == null || request.getTargetRevisionNo() == null) {
             throw new IllegalArgumentException("发布单参数不完整");
@@ -437,5 +481,3 @@ public class ReleaseService {
         return false;
     }
 }
-
-

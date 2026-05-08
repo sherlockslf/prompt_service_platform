@@ -40,13 +40,17 @@
       </el-aside>
       <el-main class="main-content" :class="{ 'main-content-collapsed': isSidebarCollapsed }">
         <!-- PSU列表 -->
-        <div v-if="activeMenu === '1'" class="content-section">
+        <div v-if="activeMenu === '1'" class="content-section neo-panel">
           <div class="header-section">
             <h2>PSU列表</h2>
             <el-button type="primary" @click="showCreatePsuDialog = true">新建PSU</el-button>
           </div>
-          <el-table :data="psus" style="width: 100%; margin-top: 20px;" v-loading="loadingPsus">
-            <el-table-column prop="psuId" label="PSU ID" width="200"></el-table-column>
+          <el-table class="table-neo" :data="psus" style="width: 100%; margin-top: 20px;" v-loading="loadingPsus">
+            <el-table-column label="PSU ID" width="200">
+              <template #default="{ row }">
+                <el-button link type="primary" @click="goToPsuPreview(row)">{{ row.psuId }}</el-button>
+              </template>
+            </el-table-column>
             <el-table-column prop="name" label="名称" width="200"></el-table-column>
             <el-table-column prop="description" label="描述"></el-table-column>
             <el-table-column prop="status" label="状态" width="100">
@@ -66,7 +70,6 @@
                 <el-button size="small" @click="viewSchema(row)">查看Schema</el-button>
                 <el-button size="small" @click="openEditPsuDialog(row)" :disabled="row.status !== 'DRAFT'">编辑</el-button>
                 <el-button size="small" type="danger" @click="archivePsu(row)" :disabled="row.status === 'FORMAL'">归档</el-button>
-                <el-button size="small" type="success" @click="submitVersionByPsu(row)" :disabled="row.status === 'ARCHIVED' || row.status === 'CANDIDATE'">提交审核(发布)</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -81,7 +84,7 @@
         </div>
         
         <!-- Prompt编排 -->
-        <div v-if="activeMenu === '2'" class="content-section">
+        <div v-if="activeMenu === '2'" class="content-section neo-panel">
           <h2>Prompt编排调试</h2>
           <el-form :model="promptForm" label-width="120px">
             <el-form-item label="选择PSU">
@@ -96,7 +99,7 @@
             </el-form-item>
             
             <el-form-item label="Schema字段台账" v-if="schemaFields.length > 0">
-              <el-table :data="schemaFields" style="width: 100%; margin-top: 10px;">
+              <el-table class="table-neo" :data="schemaFields" style="width: 100%; margin-top: 10px;">
                 <el-table-column prop="name" label="字段名" width="200"></el-table-column>
                 <el-table-column prop="type" label="类型" width="150"></el-table-column>
                 <el-table-column prop="required" label="必填" width="100">
@@ -162,7 +165,7 @@
         </div>
 
         <!-- 版本提交 -->
-        <div v-if="activeMenu === '4'" class="content-section">
+        <div v-if="activeMenu === '4'" class="content-section neo-panel">
           <h2>版本提交与跟进</h2>
           <el-form :model="versionForm" label-width="120px">
             <el-form-item label="选择PSU">
@@ -192,7 +195,7 @@
           
           <div class="version-status">
             <h3>审核状态</h3>
-            <el-table :data="versionStatus" style="width: 100%;" v-loading="loadingVersions">
+            <el-table class="table-neo" :data="versionStatus" style="width: 100%;" v-loading="loadingVersions">
               <el-table-column prop="psuId" label="PSU ID" width="150"></el-table-column>
             <el-table-column label="版本" width="150">
                 <template #default="{ row }">
@@ -222,13 +225,22 @@
         </div>
 
         <!-- Schema编辑器 -->
-        <div v-if="activeMenu === '5'" class="content-section">
+        <div v-if="activeMenu === '5'" class="content-section neo-panel">
           <h2>JSON Schema编辑器</h2>
           <el-form :model="schemaEditForm" label-width="120px">
             <el-form-item label="选择PSU">
-              <el-select v-model="selectedSchemaPsuId" placeholder="请选择PSU" @change="loadSchemaForEdit">
+              <el-select
+                v-model="selectedSchemaPsuId"
+                placeholder="请选择PSU"
+                filterable
+                remote
+                reserve-keyword
+                :remote-method="searchSchemaPsuByName"
+                :loading="loadingSchemaPsuOptions"
+                @change="loadSchemaForEdit"
+              >
                 <el-option
-                  v-for="psu in psus"
+                  v-for="psu in schemaPsuOptions"
                   :key="psu.id"
                   :label="psu.name"
                   :value="psu.id">
@@ -259,9 +271,9 @@
         </div>
 
         <!-- 版本审核 -->
-        <div v-if="activeMenu === '6'" class="content-section">
+        <div v-if="activeMenu === '6'" class="content-section neo-panel">
           <h2>版本审核</h2>
-          <el-table :data="versionStatus" style="width: 100%;" v-loading="loadingVersions">
+          <el-table class="table-neo" :data="versionStatus" style="width: 100%;" v-loading="loadingVersions">
             <el-table-column prop="psuId" label="PSU ID" width="150"></el-table-column>
             <el-table-column label="版本" width="150">
               <template #default="{ row }">
@@ -290,7 +302,7 @@
         </div>
 
         <!-- 代码生成 -->
-        <div v-if="activeMenu === '7'" class="content-section">
+        <div v-if="activeMenu === '7'" class="content-section neo-panel">
           <h2>代码生成</h2>
           <el-form label-width="120px">
             <el-form-item label="选择PSU">
@@ -315,12 +327,12 @@
         </div>
 
         <!-- 发版中心 -->
-        <div v-if="activeMenu === '8'" class="content-section">
+        <div v-if="activeMenu === '8'" class="content-section neo-panel">
           <ReleaseCenter />
         </div>
 
         <!-- 系统管理 -->
-        <div v-if="activeMenu === '9'" class="content-section">
+        <div v-if="activeMenu === '9'" class="content-section neo-panel">
           <h2>系统管理</h2>
           <el-alert title="系统管理能力已在当前页统一导航下接入，后续可按需继续补充子模块。" type="info" :closable="false" show-icon />
         </div>
@@ -329,7 +341,7 @@
     
     <!-- Schema查看对话框 -->
     <el-dialog v-model="showSchemaDialog" title="Schema详情" width="70%">
-      <el-table :data="viewingSchemaFields" style="width: 100%;">
+      <el-table class="table-neo" :data="viewingSchemaFields" style="width: 100%;">
         <el-table-column prop="name" label="字段名" width="200"></el-table-column>
         <el-table-column prop="type" label="类型" width="150"></el-table-column>
         <el-table-column prop="required" label="必填" width="100">
@@ -387,13 +399,14 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, reactive, onMounted, onBeforeUnmount, computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { psuApi, schemaApi, promptApi, versionApi, versionReviewApi } from '@/services/api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import ReleaseCenter from '@/views/developer/ReleaseCenter.vue'
 
 const activeMenu = ref('1')
+const route = useRoute()
 const router = useRouter()
 const isSidebarCollapsed = ref(false)
 const showSchemaDialog = ref(false)
@@ -413,6 +426,9 @@ const selectedPsuId = ref('')
 const selectedVersionPsuId = ref('')
 const selectedSchemaPsuId = ref('')
 const selectedCodeGenPsuId = ref('')
+const schemaPsuOptions = ref([])
+const loadingSchemaPsuOptions = ref(false)
+let schemaPsuSearchDebounceTimer = null
 const newPsuFormRef = ref(null)
 const editPsuFormRef = ref(null)
 const newPsuForm = reactive({
@@ -461,6 +477,11 @@ const currentPromptEditable = ref(true)
 const currentPromptFragmentId = ref(null)
 const isBusinessUser = ref(true)
 
+const goToPsuPreview = (psu) => {
+  if (!psu?.id) return
+  router.push(`/business/psus/${psu.id}/preview`)
+}
+
 // 菜单选择处理
 const handleMenuSelect = (index) => {
   // Prompt编排改为容器页面，避免继续使用旧的内嵌编辑区。
@@ -482,6 +503,28 @@ const toggleSidebar = () => {
 const handlePageChange = (page) => {
   psuPagination.page = page
   loadPsus()
+}
+
+const loadSchemaPsuOptions = async (name = '') => {
+  loadingSchemaPsuOptions.value = true
+  try {
+    const response = await psuApi.getPsus(1, 10, name)
+    schemaPsuOptions.value = Array.isArray(response.data?.content) ? response.data.content : []
+  } catch (error) {
+    console.error('加载Schema可选PSU失败:', error)
+    schemaPsuOptions.value = []
+  } finally {
+    loadingSchemaPsuOptions.value = false
+  }
+}
+
+const searchSchemaPsuByName = (keyword) => {
+  if (schemaPsuSearchDebounceTimer) {
+    clearTimeout(schemaPsuSearchDebounceTimer)
+  }
+  schemaPsuSearchDebounceTimer = setTimeout(() => {
+    loadSchemaPsuOptions(keyword || '')
+  }, 250)
 }
 
 // 新建PSU：校验表单并调用后端创建接口
@@ -931,24 +974,6 @@ const submitVersion = async () => {
   }
 }
 
-// 行内发布入口：直接按当前PSU提交版本审核
-const submitVersionByPsu = async (psu) => {
-  if (psu.status === 'ARCHIVED' || psu.status === 'CANDIDATE') {
-    ElMessage.warning('当前状态不允许提交审核')
-    return
-  }
-  try {
-    await versionApi.submitVersion(psu.id)
-    ElMessage.success(`PSU ${psu.psuId} 已提交审核`)
-    selectedVersionPsuId.value = psu.id
-    activeMenu.value = '4'
-    await loadVersionStatus()
-  } catch (error) {
-    console.error('提交版本失败:', error)
-    ElMessage.error('提交失败')
-  }
-}
-
 // 加载PSU列表
 const loadPsus = async () => {
   loadingPsus.value = true
@@ -981,25 +1006,49 @@ const loadVersionStatus = async () => {
 }
 
 onMounted(() => {
+  loadSchemaPsuOptions()
+  const menu = route.query.menu
+  const queryPsuId = Number(route.query.psuId)
+  if (menu === '5') {
+    activeMenu.value = '5'
+    if (Number.isInteger(queryPsuId) && queryPsuId > 0) {
+      selectedSchemaPsuId.value = queryPsuId
+      loadSchemaForEdit()
+    }
+  }
   loadPsus()
   loadVersionStatus()
+})
+
+onBeforeUnmount(() => {
+  if (schemaPsuSearchDebounceTimer) {
+    clearTimeout(schemaPsuSearchDebounceTimer)
+  }
 })
 </script>
 
 <style scoped>
 .business-dashboard {
-  --layout-header-height: 60px;
+  --layout-header-height: 72px;
   --layout-sidebar-offset: 16px;
   min-height: calc(100vh - var(--layout-header-height));
+  color: var(--neo-text);
 }
 
 .sidebar {
-  background-color: #545c64;
-  color: #fff;
+  background: linear-gradient(180deg, rgba(9, 23, 41, 0.9), rgba(7, 14, 28, 0.95));
+  color: var(--neo-text);
+  border-right: 1px solid var(--neo-border);
+  border-radius: 0 16px 16px 0;
+  box-shadow: 12px 0 24px rgba(0, 0, 0, 0.24);
   height: calc(100vh - var(--layout-header-height) - var(--layout-sidebar-offset));
   position: fixed;
   top: calc(var(--layout-header-height) + var(--layout-sidebar-offset));
   left: 0;
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .sidebar-collapsed {
@@ -1008,6 +1057,33 @@ onMounted(() => {
 
 .menu {
   border-right: none;
+  background: transparent;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+:deep(.menu .el-menu-item) {
+  color: var(--neo-text-dim);
+  border-left: 2px solid transparent;
+  margin: 6px 10px;
+  border-radius: 10px;
+  justify-content: center;
+  text-align: center;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+:deep(.menu .el-menu-item:hover) {
+  color: #d8f8ff;
+  background: rgba(77, 231, 200, 0.12);
+}
+
+:deep(.menu .el-menu-item.is-active) {
+  color: #dbfffb;
+  background: linear-gradient(90deg, rgba(77, 231, 200, 0.24), rgba(87, 168, 255, 0.16));
+  border-left-color: var(--neo-accent);
 }
 
 .sidebar-collapsed :deep(.el-menu-item span) {
@@ -1021,18 +1097,20 @@ onMounted(() => {
 
 .sidebar-toggle {
   position: absolute;
-  top: 12px;
+  top: 50%;
   right: -14px;
+  transform: translateY(-50%);
   width: 28px;
   height: 28px;
-  border: 1px solid #dcdfe6;
+  border: 1px solid var(--neo-border);
   border-radius: 14px;
-  background: #fff;
+  background: rgba(10, 24, 43, 0.96);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 5;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.22);
 }
 
 .triangle-left {
@@ -1040,7 +1118,7 @@ onMounted(() => {
   height: 0;
   border-top: 7px solid transparent;
   border-bottom: 7px solid transparent;
-  border-right: 10px solid #606266;
+  border-right: 10px solid #94e9dc;
 }
 
 .triangle-right {
@@ -1048,13 +1126,13 @@ onMounted(() => {
   height: 0;
   border-top: 7px solid transparent;
   border-bottom: 7px solid transparent;
-  border-left: 10px solid #606266;
+  border-left: 10px solid #94e9dc;
 }
 
 .main-content {
   margin-left: 200px;
   min-height: calc(100vh - var(--layout-header-height));
-  padding: 20px;
+  padding: 22px;
   overflow-y: auto;
 }
 
@@ -1066,10 +1144,20 @@ onMounted(() => {
   padding: 20px;
 }
 
+.neo-panel {
+  border: 1px solid var(--neo-border);
+  border-radius: var(--neo-radius-lg);
+  background: var(--neo-surface);
+  box-shadow: var(--neo-shadow);
+  backdrop-filter: blur(8px);
+  animation: panel-in 240ms ease-out;
+}
+
 .header-section {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 16px;
 }
 
 .prompt-editor-container {
@@ -1079,10 +1167,10 @@ onMounted(() => {
 
 .variable-panel {
   width: 200px;
-  border: 1px solid #dcdfe6;
-  border-radius: 4px;
+  border: 1px solid var(--neo-border);
+  border-radius: var(--neo-radius-md);
   padding: 10px;
-  background-color: #f5f7fa;
+  background-color: var(--neo-surface-soft);
 }
 
 .variable-list {
@@ -1101,7 +1189,7 @@ onMounted(() => {
 .input-field label {
   display: block;
   margin-bottom: 5px;
-  font-weight: bold;
+  font-weight: 600;
 }
 
 .version-status {
@@ -1110,5 +1198,89 @@ onMounted(() => {
 
 h2, h3 {
   margin-bottom: 20px;
+  color: var(--neo-text);
+}
+
+:deep(.el-button--primary) {
+  border: none !important;
+  background: linear-gradient(110deg, var(--neo-accent), var(--neo-accent-2)) !important;
+  color: #071120 !important;
+  font-weight: 700;
+  box-shadow: 0 8px 20px rgba(77, 231, 200, 0.28);
+}
+
+:deep(.el-button--danger) {
+  border: none !important;
+  background: linear-gradient(110deg, #ff7c95, var(--neo-danger)) !important;
+  color: #1a0810 !important;
+  font-weight: 700;
+}
+
+:deep(.el-button.is-link) {
+  color: #88f9e5 !important;
+}
+
+:deep(.el-input__wrapper),
+:deep(.el-textarea__inner),
+:deep(.el-select__wrapper) {
+  background: rgba(6, 16, 30, 0.88) !important;
+  box-shadow: inset 0 0 0 1px var(--neo-border) !important;
+  color: var(--neo-text) !important;
+}
+
+:deep(.el-textarea__inner) {
+  color: var(--neo-text) !important;
+}
+
+:deep(.el-pagination) {
+  color: var(--neo-text-dim);
+}
+
+:deep(.table-neo) {
+  border-radius: var(--neo-radius-md);
+  overflow: hidden;
+}
+
+:deep(.table-neo .el-table),
+:deep(.table-neo .el-table__inner-wrapper),
+:deep(.table-neo .el-table tr),
+:deep(.table-neo .el-table th.el-table__cell),
+:deep(.table-neo .el-table td.el-table__cell) {
+  background: transparent !important;
+}
+
+:deep(.table-neo .el-table th.el-table__cell) {
+  color: #b9d8eb;
+  border-bottom: 1px solid rgba(95, 158, 199, 0.22);
+}
+
+:deep(.table-neo .el-table td.el-table__cell) {
+  color: var(--neo-text);
+  border-bottom: 1px solid rgba(95, 158, 199, 0.12);
+}
+
+:deep(.table-neo .el-table__row:hover td.el-table__cell) {
+  background: rgba(77, 231, 200, 0.08) !important;
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 992px) {
+  .main-content {
+    padding: 14px;
+  }
+
+  .content-section {
+    padding: 14px;
+  }
 }
 </style>

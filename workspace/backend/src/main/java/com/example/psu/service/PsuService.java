@@ -16,6 +16,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.util.Objects;
 
@@ -64,10 +65,13 @@ public class PsuService {
      * @param size 每页大小
      * @return 分页结果
      */
-    public Page<PsuUnit> getPsus(int page, int size) {
+    public Page<PsuUnit> getPsus(int page, int size, String name) {
         // 页码从0开始，所以减1
         int pageNum = Math.max(0, page - 1);
         Pageable pageable = PageRequest.of(pageNum, size, Sort.by(Sort.Direction.DESC, "updatedAt"));
+        if (StringUtils.hasText(name)) {
+            return psuRepository.findByNameContainingIgnoreCaseOrderByUpdatedAtDesc(name.trim(), pageable);
+        }
         return psuRepository.findAll(pageable);
     }
     

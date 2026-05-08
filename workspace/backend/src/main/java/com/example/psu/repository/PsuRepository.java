@@ -34,4 +34,12 @@ public interface PsuRepository extends JpaRepository<PsuUnit, Long> {
      * @return 分页结果
      */
     Page<PsuUnit> findAllByOrderByUpdatedAtDesc(Pageable pageable);
+
+    /**
+     * 按名称模糊查询PSU列表（忽略大小写），按更新时间倒序
+     * @param name 名称关键字
+     * @param pageable 分页参数
+     * @return 分页结果
+     */
+    Page<PsuUnit> findByNameContainingIgnoreCaseOrderByUpdatedAtDesc(String name, Pageable pageable);
 }

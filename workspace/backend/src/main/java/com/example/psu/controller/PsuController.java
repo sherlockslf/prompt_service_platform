@@ -50,8 +50,9 @@ public class PsuController {
     @GetMapping
     public ResponseEntity<Page<PsuResponse>> getPsus(
             @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        Page<PsuUnit> psus = psuService.getPsus(page, size);
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String name) {
+        Page<PsuUnit> psus = psuService.getPsus(page, size, name);
         Page<PsuResponse> responsePage = psus.map(psuService::convertToResponse);
         return ResponseEntity.ok(responsePage);
     }

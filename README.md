@@ -1,7 +1,7 @@
 # Prompt Service Platform
 
-**文档版本**：V1.9（开发进展同步）  
-**版本时间**：2026-04-29
+**文档版本**：V2.0（文件清单与测试链路同步）  
+**版本时间**：2026-05-08
 
 > 目标：构建一个面向企业内部的 Prompt 研发平台，覆盖提示词模板研发、服务化发布、版本治理、测试评估与可追溯运营。
 
@@ -31,7 +31,9 @@ prompt_service_platform/
 ├─ workspace/
 │  ├─ backend/      # Spring Boot 服务
 │  ├─ frontend/     # Vue3 管理台
-│  ├─ tools/        # 初始化脚本
+│  ├─ tools/        # DB脚本与自动化测试脚本
+│  │  └─ psu_integration/      # 模块测试 + 全链路集成测试
+│  ├─ nacos_config.txt         # 本地配置中心示例
 │  ├─ start-all.bat
 │  ├─ start-backend.bat
 │  └─ start-frontend.bat
@@ -54,8 +56,9 @@ flowchart TB
     C --> C1[views]
     C --> C2[services/api.js]
     C --> C3[components]
-    D --> D1[db_drop_existing_tables.py]
-    D --> D2[db_bootstrap_from_yml.py]
+    D --> D1[db_bootstrap_from_yml.py]
+    D --> D2[db_init_schema_and_seed.py]
+    D --> D3[psu_integration/run_all_tests.ps1]
 
     classDef root fill:#dbeafe,color:#1e3a8a,stroke:#1d4ed8;
     classDef backend fill:#dcfce7,color:#166534,stroke:#16a34a;
@@ -64,7 +67,7 @@ flowchart TB
     class A root;
     class B,B1,B2,B3,B4,B5 backend;
     class C,C1,C2,C3 frontend;
-    class D,D1,D2 tools;
+    class D,D1,D2,D3 tools;
 ```
 
 ### 2.4 部署拓扑图（运行视角）
@@ -114,7 +117,45 @@ sequenceDiagram
     FE->>BE: 线上解析 /api/prompt-service/resolve
     BE->>DB: 路由命中稳定/灰度版本
     BE-->>FE: 返回 releaseId/revisionNo
-    FE->>LLM: 使用渲染 Prompt 调用模型
+FE->>LLM: 使用渲染 Prompt 调用模型
+```
+
+### 2.6 全链路流程图（回归测试）
+
+```mermaid
+flowchart TD
+    A[启动后端与前端] --> B[执行 run_module_tests.ps1]
+    B --> C{6个模块测试通过?}
+    C -- 否 --> X[停止并输出失败报告]
+    C -- 是 --> D[执行 run_psu_full_flow_test.ps1]
+    D --> E[按18步业务链路执行]
+    E --> F[写入 latest-report.json]
+    F --> G[人工复核关键节点]
+    G --> H[更新README与开发记录]
+```
+
+### 2.7 全链路关键时序图（测试驱动）
+
+```mermaid
+sequenceDiagram
+    participant QA as Tester/Developer
+    participant PS as PowerShell
+    participant BE as Backend API
+    participant DB as MySQL
+    participant RP as latest-report.json
+
+    QA->>PS: run_all_tests.ps1
+    PS->>BE: 调用模块测试用例集
+    BE->>DB: 写入/读取PSU、Schema、Review、Release数据
+    DB-->>BE: 返回事务结果
+    BE-->>PS: 模块测试结果(6/6)
+
+    PS->>BE: 调用全链路18步集成用例
+    BE->>DB: 执行创建-提审-发布-resolve流程
+    DB-->>BE: 返回执行结果
+    BE-->>PS: 集成测试结果(18/18)
+    PS->>RP: 输出JSON报告
+    RP-->>QA: 提供可追溯回归证据
 ```
 
 ## 3. 五大模块与完成度
@@ -177,6 +218,14 @@ sequenceDiagram
 - 已完成模块F首批落地：评估任务/执行/报告接口与“评估中心”页面已打通。
 - 已完成模块F体验补齐：支持从测试集列表一键发起评估任务（自动带参进入评估中心）。
 - 已完成模块F任务管理补齐：评估中心支持任务历史列表、按测试集筛选以及历史任务详情/报告回看。
+
+## 4.7 近期开发进展（2026-05-08）
+
+- 已新增模块化自动化测试套件：`workspace/tools/psu_integration/test_module_*.py`，覆盖 PSU、Schema/Param、编排审核、测试运行、评估、发布解析 6 个模块。
+- 已新增全链路集成测试编排：`psu_api_case_logic.py` + `psu_api_test_runner.py`，按 18 步业务链路执行。
+- 已新增一键执行脚本：`run_module_tests.ps1`、`run_psu_full_flow_test.ps1`、`run_all_tests.ps1`。
+- 已沉淀执行报告：`workspace/tools/psu_integration/reports/latest-report.json`，并提供测试执行记录文档 `TEST_EXECUTION_DOC_2026-05-08.md`。
+- 本次记录基于 2026-05-08 回归结果：模块测试 `6/6` 通过、全链路测试 `18/18` 通过。
 
 ### 4.4 模块4：Prompt 评估（已实现部分）
 
@@ -357,6 +406,15 @@ npm run dev
 - `PSU_DB_PASSWORD`
 - `PSU_DB_NAME`
 
+### 6.5 自动化回归测试（新增）
+
+```powershell
+powershell -ExecutionPolicy Bypass -File workspace\tools\psu_integration\run_all_tests.ps1 -BaseUrl "http://127.0.0.1:8084" -ApiPrefix "/api"
+```
+
+- 模块测试脚本：`workspace/tools/psu_integration/test_module_*.py`
+- 全链路测试报告：`workspace/tools/psu_integration/reports/latest-report.json`
+
 ## 7. 近期路线图（建议）
 
 ### 里程碑 M1：版本治理可上线（2-3 周）
@@ -389,3 +447,29 @@ npm run dev
 - 模块2发布方案（灰度/回滚）：`docs/模块2-发布灰度回滚-详细方案.md`
 - 版本号改造方案（单字段）：`docs/版本号单字段改造方案.md`
 - 前端说明：`workspace/frontend/README.md`
+
+## 9. 数据库约定（新增）
+
+### 9.1 命名与字段约定
+
+- 表命名统一前缀：`ai_prompt_`。
+- 主键统一：`id BIGINT AUTO_INCREMENT`。
+- 时间字段统一：`created_at`、`updated_at`，默认 `CURRENT_TIMESTAMP`。
+- 用户追踪字段统一：`created_by`、`updated_by`、`modified_by`、`operator_id`（按业务场景使用）。
+- 状态字段分层：编排/审核/发布使用明确 `ENUM`；测试与评估状态使用 `VARCHAR(32)`，由后端做状态合法性校验。
+
+### 9.2 一致性约定
+
+- 覆盖写语义：`ai_prompt_json_schemas` 与 `ai_prompt_param_sets` 以 `psu_id` 唯一约束覆盖更新。
+- 编排唯一性：`ai_prompt_compositions` 对 `psu_id` 唯一，快照表 `ai_prompt_composition_revisions` 对 `(composition_id, revision_no)` 唯一。
+- 版本唯一性：`ai_prompt_version_reviews` 对 `(psu_id, version_no)` 唯一。
+- 生效指针唯一性：`ai_prompt_live_versions` 对 `(psu_id, environment)` 唯一。
+- 报告唯一性：`ai_prompt_evaluation_reports` 对 `task_id` 唯一。
+
+### 9.3 业务域分表约定
+
+- 主数据域：`ai_prompt_psu`、`ai_prompt_users`、`ai_prompt_system_configs`。
+- 研发编排域：`ai_prompt_compositions`、`ai_prompt_composition_revisions`、`ai_prompt_prompt_fragments`、`ai_prompt_version_reviews`。
+- 测试评估域：`ai_prompt_test_datasets`、`ai_prompt_test_runs`、`ai_prompt_test_run_items`、`ai_prompt_evaluation_tasks`、`ai_prompt_evaluation_item_results`、`ai_prompt_evaluation_reports`。
+- 发布治理域：`ai_prompt_releases`、`ai_prompt_release_rules`、`ai_prompt_live_versions`、`ai_prompt_rollbacks`、`ai_prompt_release_versions`。
+- 审计域：`ai_prompt_audit_logs`。

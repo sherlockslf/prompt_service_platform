@@ -7,6 +7,7 @@ const ReleaseCenter = () => import('../views/developer/ReleaseCenter.vue')
 const EvaluationCenter = () => import('../views/developer/EvaluationCenter.vue')
 const BusinessDashboard = () => import('../views/business/Dashboard.vue')
 const PromptComposer = () => import('../views/business/PromptComposer.vue')
+const PsuPreview = () => import('../views/business/PsuPreview.vue')
 const CompositionReview = () => import('../views/developer/CompositionReview.vue')
 
 const routes = [
@@ -49,6 +50,11 @@ const routes = [
     path: '/business/psus/:psuId/composer',
     name: 'PromptComposer',
     component: PromptComposer
+  },
+  {
+    path: '/business/psus/:psuId/preview',
+    name: 'PsuPreview',
+    component: PsuPreview
   },
   {
     path: '/developer/psus/:psuId/reviews/:reviewId',

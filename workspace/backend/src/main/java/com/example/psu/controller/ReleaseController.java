@@ -18,9 +18,11 @@ import org.springframework.web.bind.annotation.RestController;
 import com.example.psu.dto.request.CreateReleaseRequest;
 import com.example.psu.dto.request.ReleaseRuleRequest;
 import com.example.psu.dto.request.ResolvePromptRequest;
+import com.example.psu.dto.response.PromptSchemaResolveResponse;
 import com.example.psu.dto.request.ReviewReleaseRequest;
 import com.example.psu.dto.request.RollbackReleaseRequest;
 import com.example.psu.dto.response.ResolvePromptResponse;
+import com.example.psu.enums.PsuTag;
 import com.example.psu.entity.PromptRelease;
 import com.example.psu.entity.PromptReleaseRule;
 import com.example.psu.service.ReleaseService;
@@ -123,5 +125,12 @@ public class ReleaseController {
     public ResponseEntity<ResolvePromptResponse> resolve(@RequestBody ResolvePromptRequest request) {
         return ResponseEntity.ok(releaseService.resolve(request));
     }
-}
 
+    @GetMapping({"/api/prompt-service/content", "/api/v1/prompt-service/content"})
+    public ResponseEntity<PromptSchemaResolveResponse> getPromptAndSchema(
+        @RequestParam String psuId,
+        @RequestParam String tag
+    ) {
+        return ResponseEntity.ok(releaseService.getPromptAndSchema(psuId, PsuTag.valueOf(tag.trim().toUpperCase())));
+    }
+}
