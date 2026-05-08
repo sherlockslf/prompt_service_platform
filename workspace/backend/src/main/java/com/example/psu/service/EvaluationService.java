@@ -39,6 +39,7 @@ import java.util.Objects;
  * @description 提供评估任务创建、执行与报告查询能力
  */
 @Service
+@SuppressWarnings("null")
 public class EvaluationService {
     private static final String TASK_CREATED = "CREATED";
     private static final String TASK_RUNNING = "RUNNING";

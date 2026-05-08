@@ -1,5 +1,16 @@
 package com.example.psu.service;
 
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.example.psu.dto.request.CreateReleaseRequest;
 import com.example.psu.dto.request.ReleaseRuleRequest;
 import com.example.psu.dto.request.ResolvePromptRequest;
@@ -10,8 +21,6 @@ import com.example.psu.entity.PromptLiveVersion;
 import com.example.psu.entity.PromptRelease;
 import com.example.psu.entity.PromptReleaseRule;
 import com.example.psu.entity.PromptRollbackRecord;
-import com.example.psu.entity.PsuReleaseVersion;
-import com.example.psu.entity.PsuUnit;
 import com.example.psu.enums.PsuTag;
 import com.example.psu.enums.ReleaseRuleType;
 import com.example.psu.enums.ReleaseStatus;
@@ -25,17 +34,6 @@ import com.example.psu.repository.PromptReleaseRuleRepository;
 import com.example.psu.repository.PromptRollbackRecordRepository;
 import com.example.psu.repository.PsuReleaseVersionRepository;
 import com.example.psu.repository.PsuRepository;
-import com.example.psu.repository.VersionReviewRepository;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
 
 /**
  * 发布域服务
@@ -50,7 +48,6 @@ public class ReleaseService {
     private final PromptRollbackRecordRepository promptRollbackRecordRepository;
     private final PromptCompositionRevisionRepository promptCompositionRevisionRepository;
     private final PsuRepository psuRepository;
-    private final VersionReviewRepository versionReviewRepository;
     private final PsuReleaseVersionRepository psuReleaseVersionRepository;
 
     public ReleaseService(
@@ -60,7 +57,6 @@ public class ReleaseService {
         PromptRollbackRecordRepository promptRollbackRecordRepository,
         PromptCompositionRevisionRepository promptCompositionRevisionRepository,
         PsuRepository psuRepository,
-        VersionReviewRepository versionReviewRepository,
         PsuReleaseVersionRepository psuReleaseVersionRepository
     ) {
         this.promptReleaseRepository = promptReleaseRepository;
@@ -69,7 +65,6 @@ public class ReleaseService {
         this.promptRollbackRecordRepository = promptRollbackRecordRepository;
         this.promptCompositionRevisionRepository = promptCompositionRevisionRepository;
         this.psuRepository = psuRepository;
-        this.versionReviewRepository = versionReviewRepository;
         this.psuReleaseVersionRepository = psuReleaseVersionRepository;
     }
 
@@ -97,7 +92,8 @@ public class ReleaseService {
         RequestValidationUtils.requireNonNull(request, "request");
         validateCreateRequest(request);
         Long safePsuId = Objects.requireNonNull(request.getPsuId());
-        PsuUnit psu = psuRepository.findById(safePsuId)
+        // 确认PSU存在
+        psuRepository.findById(safePsuId)
             .orElseThrow(() -> new IllegalArgumentException("PSU不存在: " + safePsuId));
         psuReleaseVersionRepository.findTopByPsuIdAndTagOrderByUpdatedAtDesc(safePsuId, PsuTag.FORMAL)
             .orElseThrow(() -> new IllegalArgumentException("未找到正式版本，不允许创建发布单"));

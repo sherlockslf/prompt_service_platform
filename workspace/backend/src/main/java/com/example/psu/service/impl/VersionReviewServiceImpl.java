@@ -41,6 +41,7 @@ import java.util.regex.Pattern;
 
 @Service
 @Transactional
+@SuppressWarnings("null")
 public class VersionReviewServiceImpl implements VersionReviewService {
     private static final Pattern GIT_COMMIT_HASH_PATTERN = Pattern.compile("^[0-9a-fA-F]{7,40}$");
     private static final String LANGUAGE_JAVA = "java";
