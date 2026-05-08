@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-08T00:53:52.048678",
+  "generatedAt": "2026-05-08T10:34:26.923565",
   "total": 18,
   "passed": 18,
   "failed": 0,
@@ -11,31 +11,31 @@
       "request": {
         "query": null,
         "body": {
-          "psuId": "psu_it_local_1778172831",
-          "name": "PSU 集成测试 local",
+          "psuId": "psu_it_boot33_1778207666",
+          "name": "PSU 集成测试 boot33",
           "description": "integration test flow"
         }
       },
       "expected": "返回包含id，且psuId与请求一致",
       "actual": {
-        "id": 7,
-        "psuId": "psu_it_local_1778172831",
-        "name": "PSU 集成测试 local",
+        "id": 14,
+        "psuId": "psu_it_boot33_1778207666",
+        "name": "PSU 集成测试 boot33",
         "description": "integration test flow",
         "status": "DRAFT",
         "creatorId": 0,
         "creatorName": null,
         "versionNo": 1,
-        "createdAt": "2026-05-08T00:53:51.3640731",
-        "updatedAt": "2026-05-08T00:53:51.3640731"
+        "createdAt": "2026-05-08T10:34:26.3993621",
+        "updatedAt": "2026-05-08T10:34:26.3993621"
       },
       "passed": true,
-      "reason": "PSU创建成功，id=7"
+      "reason": "PSU创建成功，id=14"
     },
     {
       "name": "更新Schema",
       "method": "PUT",
-      "path": "/schemas/7",
+      "path": "/schemas/14",
       "request": {
         "query": null,
         "body": {
@@ -46,14 +46,14 @@
       },
       "expected": "返回psuId与当前PSU一致",
       "actual": {
-        "id": 6,
-        "psuId": 7,
+        "id": 12,
+        "psuId": 14,
         "schemaContent": "{\"type\": \"object\", \"properties\": {\"user\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\"}, \"intent\": {\"type\": \"string\"}}}}}",
         "version": 1,
         "modifiedBy": 0,
         "modifierName": null,
-        "createdAt": "2026-05-08T00:53:51.4009336",
-        "updatedAt": "2026-05-08T00:53:51.4014756",
+        "createdAt": "2026-05-08T10:34:26.4237187",
+        "updatedAt": "2026-05-08T10:34:26.4237187",
         "changeLog": "init schema for integration test"
       },
       "passed": true,
@@ -62,7 +62,7 @@
     {
       "name": "更新参数集",
       "method": "PUT",
-      "path": "/param-sets/7",
+      "path": "/param-sets/14",
       "request": {
         "query": null,
         "body": {
@@ -72,13 +72,13 @@
       },
       "expected": "返回psuId与当前PSU一致",
       "actual": {
-        "id": 6,
-        "psuId": 7,
+        "id": 12,
+        "psuId": 14,
         "paramSetContent": "{\"user\": {\"name\": \"Alice\", \"intent\": \"查询账户余额\"}}",
         "modifiedBy": 0,
         "modifierName": null,
-        "createdAt": "2026-05-08T00:53:51.4488414",
-        "updatedAt": "2026-05-08T00:53:51.4488414",
+        "createdAt": "2026-05-08T10:34:26.4680666",
+        "updatedAt": "2026-05-08T10:34:26.4680666",
         "changeLog": "init param set for integration test"
       },
       "passed": true,
@@ -90,7 +90,7 @@
       "path": "/compositions",
       "request": {
         "query": {
-          "psuId": 7
+          "psuId": 14
         },
         "body": {
           "content": "你好 {{user.name}}，你的诉求是：{{user.intent}}",
@@ -108,8 +108,8 @@
       },
       "expected": "返回composition id",
       "actual": {
-        "id": 5,
-        "psuId": 7,
+        "id": 12,
+        "psuId": 14,
         "status": "DRAFT",
         "schemaVersion": 1,
         "content": "你好 {{user.name}}，你的诉求是：{{user.intent}}",
@@ -128,10 +128,10 @@
         },
         "rejectionReason": null,
         "rejectionType": null,
-        "updatedAt": "2026-05-08T00:53:51.4954777"
+        "updatedAt": "2026-05-08T10:34:26.516046"
       },
       "passed": true,
-      "reason": "编排保存成功，composition_id=5"
+      "reason": "编排保存成功，composition_id=12"
     },
     {
       "name": "渲染编排",
@@ -139,10 +139,10 @@
       "path": "/compositions/render",
       "request": {
         "query": {
-          "psuId": 7
+          "psuId": 14
         },
         "body": {
-          "compositionId": 5,
+          "compositionId": 12,
           "input": {
             "user": {
               "name": "Alice",
@@ -170,14 +170,14 @@
       "path": "/compositions/submit",
       "request": {
         "query": {
-          "psuId": 7
+          "psuId": 14
         },
         "body": null
       },
       "expected": "status=CANDIDATE",
       "actual": {
-        "id": 5,
-        "psuId": 7,
+        "id": 12,
+        "psuId": 14,
         "status": "CANDIDATE",
         "schemaVersion": 1,
         "content": "你好 {{user.name}}，你的诉求是：{{user.intent}}",
@@ -196,7 +196,7 @@
         },
         "rejectionReason": null,
         "rejectionType": null,
-        "updatedAt": "2026-05-08T00:53:51.5738906"
+        "updatedAt": "2026-05-08T10:34:26.5610613"
       },
       "passed": true,
       "reason": "编排提交成功"
@@ -204,37 +204,37 @@
     {
       "name": "提交版本审核",
       "method": "POST",
-      "path": "/versions/7/submit",
+      "path": "/versions/14/submit",
       "request": {
         "query": null,
         "body": null
       },
       "expected": "返回review id",
       "actual": {
-        "id": 3,
-        "psuId": 7,
+        "id": 6,
+        "psuId": 14,
         "versionNo": 2,
         "status": "CANDIDATE",
         "submitterId": 0,
         "reviewerId": null,
         "rejectionReason": null,
         "rejectionType": null,
-        "submittedAt": "2026-05-08T00:53:51.6192846",
+        "submittedAt": "2026-05-08T10:34:26.6055397",
         "reviewedAt": null,
         "gitCommitHash": null,
         "codeContent": null,
-        "compositionId": 5,
+        "compositionId": 12,
         "compositionRevisionNo": 1,
-        "createdAt": "2026-05-08T00:53:51.6192846",
-        "updatedAt": "2026-05-08T00:53:51.6192846"
+        "createdAt": "2026-05-08T10:34:26.6060713",
+        "updatedAt": "2026-05-08T10:34:26.6060713"
       },
       "passed": true,
-      "reason": "版本提审成功，review_id=3"
+      "reason": "版本提审成功，review_id=6"
     },
     {
       "name": "审核通过",
       "method": "POST",
-      "path": "/versions/3/review",
+      "path": "/versions/6/review",
       "request": {
         "query": null,
         "body": {
@@ -243,22 +243,22 @@
       },
       "expected": "status=FORMAL",
       "actual": {
-        "id": 3,
-        "psuId": 7,
+        "id": 6,
+        "psuId": 14,
         "versionNo": 2,
         "status": "FORMAL",
         "submitterId": 0,
         "reviewerId": 0,
         "rejectionReason": null,
         "rejectionType": null,
-        "submittedAt": "2026-05-08T00:53:52",
-        "reviewedAt": "2026-05-08T00:53:51.6581898",
+        "submittedAt": "2026-05-08T10:34:27",
+        "reviewedAt": "2026-05-08T10:34:26.6453563",
         "gitCommitHash": null,
-        "codeContent": "// Complete business code for PSU:7\n// Generated parameter validation code based on JSON Schema\npublic class ParameterValidator {\n\n    public void validateInput(Object input) {\n        // Validation logic based on schema:6// Schema content:{\"type\": \"object\", \"properties\": {\"user\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\"}, \"intent\": {\"type\": \"string\"}}}}}    }\n}\n\n// Generated parameter assembly code\npublic class ParameterAssembler {\n\n    public Object assembleOutput(Object response) {\n        // Assembly logic based on input schema:6// And output schema:6        return response;\n    }\n}\n\n// Generated prompt assembly code\npublic class PromptAssembler {\n    \n    public String assemblePrompt(Object input) {\n        StringBuilder sb = new StringBuilder();\n        return sb.toString().trim();\n    }\n}\n",
-        "compositionId": 5,
+        "codeContent": "// Complete business code for PSU:14\n// Generated parameter validation code based on JSON Schema\npublic class ParameterValidator {\n\n    public void validateInput(Object input) {\n        // Validation logic based on schema:12// Schema content:{\"type\": \"object\", \"properties\": {\"user\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\"}, \"intent\": {\"type\": \"string\"}}}}}    }\n}\n\n// Generated parameter assembly code\npublic class ParameterAssembler {\n\n    public Object assembleOutput(Object response) {\n        // Assembly logic based on input schema:12// And output schema:12        return response;\n    }\n}\n\n// Generated prompt assembly code\npublic class PromptAssembler {\n    \n    public String assemblePrompt(Object input) {\n        StringBuilder sb = new StringBuilder();\n        return sb.toString().trim();\n    }\n}\n",
+        "compositionId": 12,
         "compositionRevisionNo": 1,
-        "createdAt": "2026-05-08T00:53:52",
-        "updatedAt": "2026-05-08T00:53:51.6669901"
+        "createdAt": "2026-05-08T10:34:27",
+        "updatedAt": "2026-05-08T10:34:26.6547374"
       },
       "passed": true,
       "reason": "审核通过成功"
@@ -266,16 +266,16 @@
     {
       "name": "读取最新快照",
       "method": "GET",
-      "path": "/compositions/5/revisions/latest",
+      "path": "/compositions/12/revisions/latest",
       "request": {
         "query": null,
         "body": null
       },
       "expected": "返回revisionNo",
       "actual": {
-        "id": 3,
-        "compositionId": 5,
-        "psuId": 7,
+        "id": 6,
+        "compositionId": 12,
+        "psuId": 14,
         "revisionNo": 1,
         "statusAtTime": "CANDIDATE",
         "schemaVersionAtTime": 1,
@@ -283,7 +283,7 @@
         "contentSnapshot": "你好 {{user.name}}，你的诉求是：{{user.intent}}",
         "specJsonSnapshot": "{\"injectionPlan\":[{\"path\":\"user.name\"},{\"path\":\"user.intent\"}],\"tokens\":[],\"assembledFragments\":[],\"content\":\"你好 {{user.name}}，你的诉求是：{{user.intent}}\"}",
         "createdBy": 0,
-        "createdAt": "2026-05-08T00:53:52"
+        "createdAt": "2026-05-08T10:34:27"
       },
       "passed": true,
       "reason": "读取快照成功，revisionNo=1"
@@ -294,26 +294,26 @@
       "path": "/test-datasets",
       "request": {
         "query": {
-          "psuId": 7
+          "psuId": 14
         },
         "body": {
-          "name": "dataset-it-local-1778172831",
+          "name": "dataset-it-boot33-1778207666",
           "description": "integration test dataset",
           "dataContent": "[{\"caseId\": \"case-1\", \"name\": \"normal\", \"input\": {\"user\": {\"name\": \"Bob\", \"intent\": \"查账单\"}}}, {\"caseId\": \"case-2\", \"name\": \"normal2\", \"input\": {\"user\": {\"name\": \"Cindy\", \"intent\": \"查余额\"}}}]"
         }
       },
       "expected": "返回dataset id",
       "actual": {
-        "id": 3,
-        "psuId": 7,
-        "name": "dataset-it-local-1778172831",
+        "id": 6,
+        "psuId": 14,
+        "name": "dataset-it-boot33-1778207666",
         "dataContent": "[{\"caseId\": \"case-1\", \"name\": \"normal\", \"input\": {\"user\": {\"name\": \"Bob\", \"intent\": \"查账单\"}}}, {\"caseId\": \"case-2\", \"name\": \"normal2\", \"input\": {\"user\": {\"name\": \"Cindy\", \"intent\": \"查余额\"}}}]",
         "description": "integration test dataset",
-        "createdAt": "2026-05-08T00:53:51.7393037",
-        "updatedAt": "2026-05-08T00:53:51.7393037"
+        "createdAt": "2026-05-08T10:34:26.7061041",
+        "updatedAt": "2026-05-08T10:34:26.7061041"
       },
       "passed": true,
-      "reason": "测试集创建成功，dataset_id=3"
+      "reason": "测试集创建成功，dataset_id=6"
     },
     {
       "name": "运行测试集",
@@ -321,16 +321,16 @@
       "path": "/test-runs",
       "request": {
         "query": {
-          "psuId": 7,
-          "datasetId": 3
+          "psuId": 14,
+          "datasetId": 6
         },
         "body": {
-          "compositionId": 5
+          "compositionId": 12
         }
       },
       "expected": "返回runId且failedCases=0",
       "actual": {
-        "runId": 2,
+        "runId": 4,
         "totalCases": 2,
         "successCases": 2,
         "failedCases": 0,
@@ -352,7 +352,7 @@
             "status": "SUCCESS",
             "error": null,
             "exceptionReason": null,
-            "latencyMs": 0
+            "latencyMs": 1
           },
           {
             "caseId": "case-2",
@@ -369,12 +369,12 @@
             "status": "SUCCESS",
             "error": null,
             "exceptionReason": null,
-            "latencyMs": 0
+            "latencyMs": 1
           }
         ]
       },
       "passed": true,
-      "reason": "测试运行成功，run_id=2"
+      "reason": "测试运行成功，run_id=4"
     },
     {
       "name": "创建评估任务",
@@ -383,8 +383,8 @@
       "request": {
         "query": null,
         "body": {
-          "psuId": 7,
-          "datasetId": 3,
+          "psuId": 14,
+          "datasetId": 6,
           "dimensions": [
             "relevance",
             "completeness",
@@ -394,9 +394,9 @@
       },
       "expected": "返回task id",
       "actual": {
-        "id": 2,
-        "psuId": 7,
-        "datasetId": 3,
+        "id": 4,
+        "psuId": 14,
+        "datasetId": 6,
         "status": "CREATED",
         "totalCases": 2,
         "processedCases": 0,
@@ -405,27 +405,27 @@
         "averageScore": null,
         "errorMessage": null,
         "reportId": null,
-        "createdAt": "2026-05-08T00:53:51.8139869",
+        "createdAt": "2026-05-08T10:34:26.7580662",
         "startedAt": null,
         "finishedAt": null,
         "items": []
       },
       "passed": true,
-      "reason": "评估任务创建成功，task_id=2"
+      "reason": "评估任务创建成功，task_id=4"
     },
     {
       "name": "执行评估任务",
       "method": "POST",
-      "path": "/evaluations/tasks/2/run",
+      "path": "/evaluations/tasks/4/run",
       "request": {
         "query": null,
         "body": null
       },
       "expected": "failedCases=0",
       "actual": {
-        "id": 2,
-        "psuId": 7,
-        "datasetId": 3,
+        "id": 4,
+        "psuId": 14,
+        "datasetId": 6,
         "status": "SUCCESS",
         "totalCases": 2,
         "processedCases": 2,
@@ -433,13 +433,13 @@
         "failedCases": 0,
         "averageScore": 100.0,
         "errorMessage": null,
-        "reportId": 2,
-        "createdAt": "2026-05-08T00:53:52",
-        "startedAt": "2026-05-08T00:53:51.8521734",
-        "finishedAt": "2026-05-08T00:53:51.8610534",
+        "reportId": 4,
+        "createdAt": "2026-05-08T10:34:27",
+        "startedAt": "2026-05-08T10:34:26.7789696",
+        "finishedAt": "2026-05-08T10:34:26.7854329",
         "items": [
           {
-            "id": 3,
+            "id": 7,
             "caseId": "case-1",
             "caseName": "normal",
             "input": {
@@ -458,7 +458,7 @@
             "reason": "规则评分通过"
           },
           {
-            "id": 4,
+            "id": 8,
             "caseId": "case-2",
             "caseName": "normal2",
             "input": {
@@ -479,7 +479,7 @@
         ]
       },
       "passed": true,
-      "reason": "评估执行成功，report_id=2"
+      "reason": "评估执行成功，report_id=4"
     },
     {
       "name": "创建发布单",
@@ -488,20 +488,20 @@
       "request": {
         "query": null,
         "body": {
-          "psuId": 7,
+          "psuId": 14,
           "environment": "DEV",
           "releaseType": "FULL",
-          "targetCompositionId": 5,
+          "targetCompositionId": 12,
           "targetRevisionNo": 1
         }
       },
       "expected": "返回release id",
       "actual": {
-        "id": 2,
-        "psuId": 7,
+        "id": 4,
+        "psuId": 14,
         "environment": "DEV",
         "releaseType": "FULL",
-        "targetCompositionId": 5,
+        "targetCompositionId": 12,
         "targetRevisionNo": 1,
         "baseRevisionNo": null,
         "status": "DRAFT",
@@ -513,27 +513,27 @@
         "rollbackReason": null,
         "createdBy": 0,
         "updatedBy": 0,
-        "createdAt": "2026-05-08T00:53:51.9142405",
-        "updatedAt": "2026-05-08T00:53:51.9142405"
+        "createdAt": "2026-05-08T10:34:26.8331534",
+        "updatedAt": "2026-05-08T10:34:26.8331534"
       },
       "passed": true,
-      "reason": "发布单创建成功，release_id=2"
+      "reason": "发布单创建成功，release_id=4"
     },
     {
       "name": "提交发布单",
       "method": "POST",
-      "path": "/releases/2/submit",
+      "path": "/releases/4/submit",
       "request": {
         "query": null,
         "body": null
       },
       "expected": "接口成功",
       "actual": {
-        "id": 2,
-        "psuId": 7,
+        "id": 4,
+        "psuId": 14,
         "environment": "DEV",
         "releaseType": "FULL",
-        "targetCompositionId": 5,
+        "targetCompositionId": 12,
         "targetRevisionNo": 1,
         "baseRevisionNo": null,
         "status": "PENDING_APPROVAL",
@@ -545,8 +545,8 @@
         "rollbackReason": null,
         "createdBy": 0,
         "updatedBy": 0,
-        "createdAt": "2026-05-08T00:53:52",
-        "updatedAt": "2026-05-08T00:53:51.9488441"
+        "createdAt": "2026-05-08T10:34:27",
+        "updatedAt": "2026-05-08T10:34:26.8457425"
       },
       "passed": true,
       "reason": "接口调用成功"
@@ -554,31 +554,31 @@
     {
       "name": "审批发布单",
       "method": "POST",
-      "path": "/releases/2/approve",
+      "path": "/releases/4/approve",
       "request": {
         "query": null,
         "body": null
       },
       "expected": "接口成功",
       "actual": {
-        "id": 2,
-        "psuId": 7,
+        "id": 4,
+        "psuId": 14,
         "environment": "DEV",
         "releaseType": "FULL",
-        "targetCompositionId": 5,
+        "targetCompositionId": 12,
         "targetRevisionNo": 1,
         "baseRevisionNo": null,
         "status": "APPROVED",
         "approvalBy": 0,
-        "approvedAt": "2026-05-08T00:53:51.9792593",
+        "approvedAt": "2026-05-08T10:34:26.8588671",
         "executedBy": null,
         "executedAt": null,
         "rollbackToRevisionNo": null,
         "rollbackReason": null,
         "createdBy": 0,
         "updatedBy": 0,
-        "createdAt": "2026-05-08T00:53:52",
-        "updatedAt": "2026-05-08T00:53:51.9792593"
+        "createdAt": "2026-05-08T10:34:27",
+        "updatedAt": "2026-05-08T10:34:26.8588671"
       },
       "passed": true,
       "reason": "接口调用成功"
@@ -586,31 +586,31 @@
     {
       "name": "执行发布单",
       "method": "POST",
-      "path": "/releases/2/execute",
+      "path": "/releases/4/execute",
       "request": {
         "query": null,
         "body": null
       },
       "expected": "status=SUCCESS",
       "actual": {
-        "id": 2,
-        "psuId": 7,
+        "id": 4,
+        "psuId": 14,
         "environment": "DEV",
         "releaseType": "FULL",
-        "targetCompositionId": 5,
+        "targetCompositionId": 12,
         "targetRevisionNo": 1,
         "baseRevisionNo": null,
         "status": "SUCCESS",
         "approvalBy": 0,
-        "approvedAt": "2026-05-08T00:53:52",
+        "approvedAt": "2026-05-08T10:34:27",
         "executedBy": 0,
-        "executedAt": "2026-05-08T00:53:52.0105639",
+        "executedAt": "2026-05-08T10:34:26.8854564",
         "rollbackToRevisionNo": null,
         "rollbackReason": null,
         "createdBy": 0,
         "updatedBy": 0,
-        "createdAt": "2026-05-08T00:53:52",
-        "updatedAt": "2026-05-08T00:53:52.0148777"
+        "createdAt": "2026-05-08T10:34:27",
+        "updatedAt": "2026-05-08T10:34:26.8896338"
       },
       "passed": true,
       "reason": "发布执行成功"
@@ -622,20 +622,20 @@
       "request": {
         "query": null,
         "body": {
-          "psuId": 7,
+          "psuId": 14,
           "environment": "DEV",
           "context": {
             "tenantId": "t1",
             "userId": "u1",
-            "traceId": "trace-1778172831"
+            "traceId": "trace-1778207666"
           }
         }
       },
       "expected": "routeType in {STABLE,CANARY} 且 revisionNo 为整数",
       "actual": {
-        "psuId": 7,
+        "psuId": 14,
         "environment": "DEV",
-        "releaseId": 2,
+        "releaseId": 4,
         "revisionNo": 1,
         "routeType": "STABLE",
         "ruleId": null,

@@ -27,12 +27,6 @@ spring:
         format_sql: true
         use_sql_comments: true
         
-  # SQL初始化配置
-  sql:
-    init:
-      mode: always
-      schema-locations: classpath:schema.sql
-        
   # Redis配置
   data:
     redis:

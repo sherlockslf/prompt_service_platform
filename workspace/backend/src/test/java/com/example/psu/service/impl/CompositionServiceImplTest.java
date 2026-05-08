@@ -65,21 +65,13 @@ class CompositionServiceImplTest {
     void saveDraft_shouldThrowWhenCompositionLocked() {
         PsuUnit psu = new PsuUnit();
         psu.setId(1L);
-        psu.setStatus(PsuStatus.DRAFT);
-        PromptComposition existing = new PromptComposition();
-        existing.setPsuId(1L);
-        existing.setStatus(CompositionStatus.CANDIDATE);
+        psu.setStatus(PsuStatus.ARCHIVED);
 
         CompositionSaveRequest request = new CompositionSaveRequest();
         request.setContent("hello {{userId}}");
         request.setInjectionPlan(List.of(Map.of("path", "userId")));
 
-        JsonSchema schema = new JsonSchema();
-        schema.setSchemaContent("{\"type\":\"object\",\"properties\":{\"userId\":{\"type\":\"string\"}}}");
-
         when(psuRepository.findById(1L)).thenReturn(Optional.of(psu));
-        when(compositionRepository.findByPsuId(1L)).thenReturn(Optional.of(existing));
-        when(jsonSchemaRepository.findTopByPsuIdOrderByVersionDesc(1L)).thenReturn(Optional.of(schema));
 
         assertThrows(BusinessException.class, () -> compositionService.saveDraft(1L, request, 2L));
     }

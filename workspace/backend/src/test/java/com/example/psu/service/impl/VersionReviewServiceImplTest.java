@@ -3,15 +3,20 @@ package com.example.psu.service.impl;
 import com.example.psu.dto.request.ReviewRequest;
 import com.example.psu.entity.PromptComposition;
 import com.example.psu.entity.PromptCompositionRevision;
+import com.example.psu.entity.JsonSchema;
+import com.example.psu.entity.PsuReleaseVersion;
 import com.example.psu.entity.PsuUnit;
 import com.example.psu.entity.VersionReview;
 import com.example.psu.enums.CompositionStatus;
 import com.example.psu.enums.PsuStatus;
+import com.example.psu.enums.PsuTag;
 import com.example.psu.enums.RejectionType;
 import com.example.psu.enums.ReviewStatus;
 import com.example.psu.exception.BusinessException;
+import com.example.psu.repository.JsonSchemaRepository;
 import com.example.psu.repository.PromptCompositionRepository;
 import com.example.psu.repository.PromptCompositionRevisionRepository;
+import com.example.psu.repository.PsuReleaseVersionRepository;
 import com.example.psu.repository.PsuRepository;
 import com.example.psu.repository.VersionReviewRepository;
 import com.example.psu.service.CodeGeneratorService;
@@ -51,6 +56,12 @@ class VersionReviewServiceImplTest {
     private PromptCompositionRevisionRepository promptCompositionRevisionRepository;
 
     @Mock
+    private JsonSchemaRepository jsonSchemaRepository;
+
+    @Mock
+    private PsuReleaseVersionRepository psuReleaseVersionRepository;
+
+    @Mock
     private CompositionService compositionService;
 
     @Mock
@@ -83,8 +94,12 @@ class VersionReviewServiceImplTest {
         when(compositionService.getCompositionByPsuId(1L)).thenReturn(Optional.of(draft));
         when(compositionService.submit(1L, 100L)).thenReturn(submitted);
         when(compositionService.getLatestRevision(10L)).thenReturn(Optional.of(revision));
-        when(versionReviewRepository.existsByCompositionIdAndCompositionRevisionNoAndStatus(10L, 5, ReviewStatus.CANDIDATE))
-            .thenReturn(false);
+        JsonSchema schema = new JsonSchema();
+        schema.setId(100L);
+        schema.setVersion(1);
+        when(jsonSchemaRepository.findTopByPsuIdOrderByVersionDesc(1L)).thenReturn(Optional.of(schema));
+        when(psuReleaseVersionRepository.findByPsuIdAndPsuVersionNo(1L, 123)).thenReturn(Optional.empty());
+        when(psuReleaseVersionRepository.save(any(PsuReleaseVersion.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(versionReviewRepository.save(any(VersionReview.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         VersionReview review = versionReviewService.submitVersion(1L, 100L);
@@ -99,19 +114,24 @@ class VersionReviewServiceImplTest {
         VersionReview pending = new VersionReview();
         pending.setId(7L);
         pending.setPsuId(1L);
+        pending.setVersionNo(123);
+        pending.setCompositionId(10L);
+        pending.setCompositionRevisionNo(5);
         pending.setStatus(ReviewStatus.CANDIDATE);
-
-        PsuUnit psu = new PsuUnit();
-        psu.setId(1L);
-        psu.setStatus(PsuStatus.CANDIDATE);
 
         ReviewRequest request = new ReviewRequest();
         request.setApproved(true);
 
         when(versionReviewRepository.findById(7L)).thenReturn(Optional.of(pending));
-        when(psuRepository.findById(1L)).thenReturn(Optional.of(psu));
         when(codeGeneratorService.generateCompleteBusinessCode(1L)).thenReturn("// code");
         when(versionReviewRepository.findByPsuIdOrderBySubmittedAtDesc(1L)).thenReturn(List.of(pending));
+        JsonSchema schema = new JsonSchema();
+        schema.setId(100L);
+        schema.setVersion(1);
+        when(jsonSchemaRepository.findTopByPsuIdOrderByVersionDesc(1L)).thenReturn(Optional.of(schema));
+        when(psuReleaseVersionRepository.findByPsuIdAndPsuVersionNo(1L, 123)).thenReturn(Optional.empty());
+        when(psuReleaseVersionRepository.findByPsuIdAndTag(1L, PsuTag.FORMAL)).thenReturn(List.of());
+        when(psuReleaseVersionRepository.save(any(PsuReleaseVersion.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(versionReviewRepository.save(any(VersionReview.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         VersionReview result = versionReviewService.reviewVersion(7L, request, 9L);
@@ -126,6 +146,9 @@ class VersionReviewServiceImplTest {
         VersionReview pending = new VersionReview();
         pending.setId(8L);
         pending.setPsuId(1L);
+        pending.setVersionNo(123);
+        pending.setCompositionId(10L);
+        pending.setCompositionRevisionNo(5);
         pending.setStatus(ReviewStatus.CANDIDATE);
 
         ReviewRequest request = new ReviewRequest();
@@ -133,18 +156,19 @@ class VersionReviewServiceImplTest {
         request.setRejectionReason("需要重编排");
         request.setRejectionType(RejectionType.BACK_TO_BIZ);
 
-        PsuUnit psu = new PsuUnit();
-        psu.setId(1L);
-        psu.setStatus(PsuStatus.CANDIDATE);
-
         PromptComposition draft = new PromptComposition();
         draft.setId(10L);
         draft.setPsuId(1L);
         draft.setStatus(CompositionStatus.DRAFT);
 
         when(versionReviewRepository.findById(8L)).thenReturn(Optional.of(pending));
-        when(psuRepository.findById(1L)).thenReturn(Optional.of(psu));
         when(compositionService.updateStatus(1L, CompositionStatus.DRAFT, "需要重编排", RejectionType.BACK_TO_BIZ)).thenReturn(draft);
+        JsonSchema schema = new JsonSchema();
+        schema.setId(100L);
+        schema.setVersion(1);
+        when(jsonSchemaRepository.findTopByPsuIdOrderByVersionDesc(1L)).thenReturn(Optional.of(schema));
+        when(psuReleaseVersionRepository.findByPsuIdAndPsuVersionNo(1L, 123)).thenReturn(Optional.empty());
+        when(psuReleaseVersionRepository.save(any(PsuReleaseVersion.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(versionReviewRepository.save(any(VersionReview.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         VersionReview result = versionReviewService.reviewVersion(8L, request, 9L);
@@ -156,7 +180,7 @@ class VersionReviewServiceImplTest {
 
     @Test
     void getCode_shouldThrowWhenNoApprovedReview() {
-        when(versionReviewRepository.findTopByPsuIdAndStatusOrderByReviewedAtDesc(1L, ReviewStatus.FORMAL))
+        when(psuReleaseVersionRepository.findTopByPsuIdAndTagOrderByUpdatedAtDesc(1L, PsuTag.FORMAL))
             .thenReturn(Optional.empty());
 
         assertThrows(BusinessException.class, () -> versionReviewService.getCode(1L, "java"));
