@@ -20,3 +20,8 @@ pnpm-debug.log*
 **/__pycache__/
 /workspace/tools/__pycache__/
 .venv/
+/workspace/backend/backend.*.log
+/workspace/backend/*.log
+/workspace/backend/backend-*.err.log
+/workspace/backend/backend-*.out.log
+/workspace/backend/boot-test*.log
