@@ -5,17 +5,20 @@ import com.example.psu.dto.request.TestRunRequest;
 import com.example.psu.dto.response.CompositionRenderResponse;
 import com.example.psu.dto.response.TestRunResponse;
 import com.example.psu.dto.response.TestRunSummaryResponse;
+import com.example.psu.entity.JsonSchema;
 import com.example.psu.entity.PromptComposition;
 import com.example.psu.entity.TestDataset;
 import com.example.psu.entity.TestRun;
 import com.example.psu.entity.TestRunItem;
 import com.example.psu.exception.RequestValidationUtils;
+import com.example.psu.repository.JsonSchemaRepository;
 import com.example.psu.repository.PromptCompositionRepository;
 import com.example.psu.repository.PsuRepository;
 import com.example.psu.repository.TestDatasetRepository;
 import com.example.psu.repository.TestRunItemRepository;
 import com.example.psu.repository.TestRunRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -26,6 +29,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.LinkedHashSet;
 
 /**
  * 测试运行服务
@@ -60,6 +65,12 @@ public class TestRunService {
     private CompositionService compositionService;
 
     @Autowired
+    private JsonSchemaRepository jsonSchemaRepository;
+
+    @Autowired
+    private LlmChatService llmChatService;
+
+    @Autowired
     private ObjectMapper objectMapper;
 
     /**
@@ -81,6 +92,7 @@ public class TestRunService {
 
         PromptComposition composition = resolveComposition(safePsuId, request == null ? null : request.getCompositionId());
         List<Map<String, Object>> cases = parseDatasetCases(dataset.getDataContent());
+        JsonNode schemaRoot = loadSchemaRoot(safePsuId);
 
         TestRun run = new TestRun();
         run.setPsuId(safePsuId);
@@ -115,12 +127,13 @@ public class TestRunService {
                 CompositionRenderRequest renderRequest = new CompositionRenderRequest();
                 renderRequest.setCompositionId(composition.getId());
                 renderRequest.setInput(input);
+                validateInputAgainstSchema(input, schemaRoot);
                 CompositionRenderResponse renderResponse = compositionService.render(safePsuId, renderRequest);
                 latency = (int) (System.currentTimeMillis() - begin);
                 renderedPrompt = renderResponse.getRenderedPrompt();
                 itemSuccess = renderResponse.getMissingVars() == null || renderResponse.getMissingVars().isEmpty();
                 error = itemSuccess ? null : "缺失变量: " + String.join(",", renderResponse.getMissingVars());
-                actualOutput = itemSuccess ? "MOCK_OUTPUT: " + renderedPrompt : null;
+                actualOutput = itemSuccess ? llmChatService.chatOnce(renderedPrompt) : null;
                 itemStatus = itemSuccess ? SUCCESS_STATUS : FAILED_STATUS;
                 exceptionReason = error;
             } catch (Exception ex) {
@@ -357,6 +370,61 @@ public class TestRunService {
         } catch (Exception e) {
             return new HashMap<>();
         }
+    }
+
+    private JsonNode loadSchemaRoot(Long psuId) {
+        JsonSchema schema = jsonSchemaRepository.findTopByPsuIdOrderByVersionDesc(psuId)
+            .orElseThrow(() -> new RuntimeException("当前PSU未配置JSON Schema"));
+        try {
+            return objectMapper.readTree(schema.getSchemaContent());
+        } catch (Exception e) {
+            throw new RuntimeException("JSON Schema格式错误");
+        }
+    }
+
+    private void validateInputAgainstSchema(Map<String, Object> input, JsonNode schemaRoot) {
+        if (schemaRoot == null || !schemaRoot.has("properties")) {
+            return;
+        }
+        Set<String> required = new LinkedHashSet<>();
+        if (schemaRoot.has("required") && schemaRoot.get("required").isArray()) {
+            for (JsonNode n : schemaRoot.get("required")) {
+                required.add(n.asText());
+            }
+        }
+        List<String> errors = new ArrayList<>();
+        for (String field : required) {
+            if (!input.containsKey(field) || input.get(field) == null) {
+                errors.add("缺少必填字段: " + field);
+            }
+        }
+        JsonNode properties = schemaRoot.get("properties");
+        input.forEach((k, v) -> {
+            if (!properties.has(k)) {
+                errors.add("字段不在Schema中: " + k);
+                return;
+            }
+            JsonNode fieldSchema = properties.get(k);
+            String expectedType = fieldSchema.has("type") ? fieldSchema.get("type").asText() : "";
+            if (!expectedType.isBlank() && !isTypeMatched(v, expectedType)) {
+                errors.add("字段类型不匹配: " + k + " 期望=" + expectedType);
+            }
+        });
+        if (!errors.isEmpty()) {
+            throw new RuntimeException(String.join("; ", errors));
+        }
+    }
+
+    private boolean isTypeMatched(Object value, String expectedType) {
+        return switch (expectedType) {
+            case "string" -> value instanceof String;
+            case "number" -> value instanceof Number;
+            case "integer" -> value instanceof Integer || value instanceof Long || value instanceof Short;
+            case "boolean" -> value instanceof Boolean;
+            case "array" -> value instanceof List<?>;
+            case "object" -> value instanceof Map<?, ?>;
+            default -> true;
+        };
     }
 }
 

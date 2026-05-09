@@ -34,12 +34,34 @@ CREATE TABLE IF NOT EXISTS ai_prompt_psu (
     INDEX idx_psu_units_created (created_at)
 ) COMMENT 'AI Prompt PSU单元表';
 
+-- 创建PSU版本历史表
+CREATE TABLE IF NOT EXISTS ai_prompt_psu_versions (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    psu_ref_id BIGINT NOT NULL COMMENT '关联当前PSU记录ID',
+    psu_id VARCHAR(100) NOT NULL COMMENT '业务PSU ID',
+    version_no INT NOT NULL COMMENT 'PSU版本号',
+    name VARCHAR(200) NOT NULL COMMENT 'PSU名称快照',
+    description TEXT COMMENT 'PSU描述快照',
+    status ENUM('DRAFT', 'CANDIDATE', 'FORMAL', 'ARCHIVED') NOT NULL COMMENT '状态快照',
+    operator_id BIGINT NOT NULL DEFAULT 0 COMMENT '操作人ID',
+    change_source VARCHAR(64) NOT NULL COMMENT '变更来源',
+    schema_version_no INT NULL COMMENT '该版本关联的Schema版本号',
+    composition_id BIGINT NULL COMMENT '该版本关联的编排ID',
+    composition_revision_no INT NULL COMMENT '该版本关联的编排快照版本号',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE KEY uk_psu_versions_psu_version (psu_id, version_no),
+    INDEX idx_psu_versions_psu_id (psu_id),
+    INDEX idx_psu_versions_version_no (version_no),
+    INDEX idx_psu_versions_created_at (created_at)
+) COMMENT 'AI Prompt PSU版本历史表';
+
 -- 创建JSON Schema表
 CREATE TABLE IF NOT EXISTS ai_prompt_json_schemas (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     psu_id BIGINT NOT NULL COMMENT '关联PSU ID',
     schema_content JSON NOT NULL COMMENT 'JSON Schema内容',
-    version INT NOT NULL DEFAULT 1 COMMENT '兼容字段：覆盖写语义下固定为1',
+    version INT NOT NULL DEFAULT 1 COMMENT 'Schema版本号（同一PSU下递增）',
     modified_by BIGINT NOT NULL COMMENT '修改者ID',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -49,7 +71,7 @@ CREATE TABLE IF NOT EXISTS ai_prompt_json_schemas (
     INDEX idx_json_schemas_modified_by (modified_by),
     INDEX idx_json_schemas_created (created_at),
     
-    CONSTRAINT uk_json_schemas_psu_id UNIQUE (psu_id)
+    CONSTRAINT uk_json_schemas_psu_version UNIQUE (psu_id, version)
 ) COMMENT 'AI Prompt JSON Schema表';
 
 -- 创建参数集表（覆盖写语义）
@@ -102,6 +124,7 @@ CREATE TABLE IF NOT EXISTS ai_prompt_version_reviews (
     reviewed_at DATETIME COMMENT '审核时间',
     git_commit_hash VARCHAR(64) COMMENT 'Git提交哈希',
     code_content LONGTEXT COMMENT '生成的代码内容',
+    schema_version_no INT NULL COMMENT '审核版本指向的Schema版本号',
     composition_id BIGINT NULL COMMENT '关联编排ID',
     composition_revision_no INT NULL COMMENT '关联编排快照版本',
     rejection_type ENUM('BACK_TO_DEV', 'BACK_TO_BIZ') NULL COMMENT '驳回类型',

@@ -4,32 +4,32 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import com.example.psu.entity.SystemConfig;
 import com.example.psu.enums.ConfigType;
+import com.example.psu.service.AsyncDispatchService;
 import com.example.psu.service.SystemConfigService;
 
 /**
  * 系统配置控制器（仅管理员使用）
  */
 @RestController
-@RequestMapping({"/api/configs", "/api/v1/configs"})
+@RequestMapping("/api/configs")
 public class SystemConfigController {
     
     @Autowired
     private SystemConfigService systemConfigService;
+    @Autowired
+    private AsyncDispatchService asyncDispatchService;
     
     /**
-     * 管理员系统配置页面获取所有系统配置列表
-     * 参数：无
+     * 查询全部系统配置。
+     * 请求方法与路径：GET /api/configs（兼容 /api/v1/configs）。
+     * 入参：无。
+     * 返回：SystemConfig 列表。
      */
     @GetMapping
     public ResponseEntity<List<SystemConfig>> getAllConfigs() {
@@ -38,18 +38,22 @@ public class SystemConfigController {
     }
     
     /**
-     * 管理员系统配置页面根据配置键获取特定配置
-     * 参数：configKey-配置键名
+     * 按配置键查询配置项。
+     * 请求方法与路径：GET /api/configs/by-configKey（兼容 /api/v1/...）。
+     * 入参：configKey。
+     * 返回：SystemConfig。
      */
-    @GetMapping("/{configKey}")
-    public ResponseEntity<SystemConfig> getConfigByKey(@PathVariable String configKey) {
+    @GetMapping("/by-configKey")
+    public ResponseEntity<SystemConfig> getConfigByKey(@RequestParam String configKey) {
         SystemConfig config = systemConfigService.getConfigByKey(configKey);
         return ResponseEntity.ok(config);
     }
 
     /**
-     * 开发侧/业务侧Prompt测试页面获取DashScope API Key用于在线模型测试
-     * 参数：无
+     * 查询可用 DashScope API Key（脱敏交付建议在网关层处理）。
+     * 请求方法与路径：GET /api/configs/dashscope-key（兼容 /api/v1/...）。
+     * 入参：无。
+     * 返回：{"apiKey": "..."}。
      */
     @GetMapping("/dashscope-key")
     public ResponseEntity<Map<String, String>> getDashscopeKey() {
@@ -57,8 +61,10 @@ public class SystemConfigController {
     }
     
     /**
-     * 管理员系统配置页面创建或更新系统配置
-     * 参数：configKey-配置键，configValue-配置值，configType-配置类型
+     * 创建或更新系统配置（同步）。
+     * 请求方法与路径：POST /api/configs（兼容 /api/v1/...）。
+     * 入参：requestBody（configKey、configValue、configType）。
+     * 返回：持久化后的 SystemConfig。
      */
     @PostMapping
     public ResponseEntity<SystemConfig> saveConfig(@RequestBody Map<String, String> requestBody) {
@@ -73,16 +79,51 @@ public class SystemConfigController {
         );
         return ResponseEntity.ok(config);
     }
+
+    /**
+     * 创建或更新系统配置（异步）。
+     * 请求方法与路径：POST /api/configs/async（兼容 /api/v1/...）。
+     * 入参：requestBody（configKey、configValue、configType）。
+     * 返回：202 ACCEPTED。
+     */
+    @PostMapping("/async")
+    public ResponseEntity<String> saveConfigAsync(@RequestBody Map<String, String> requestBody) {
+        String configKey = requestBody.get("configKey");
+        String configValue = requestBody.get("configValue");
+        String configType = requestBody.getOrDefault("configType", "OTHER");
+        asyncDispatchService.dispatch(() -> systemConfigService.saveConfig(
+            configKey,
+            configValue,
+            ConfigType.fromCode(configType.toUpperCase())
+        ));
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body("ACCEPTED");
+    }
     
     /**
-     * 管理员系统配置页面删除系统配置
-     * 参数：id-配置数据库ID
+     * 删除系统配置（同步）。
+     * 请求方法与路径：DELETE /api/configs/by-id（兼容 /api/v1/...）。
+     * 入参：id。
+     * 返回：200 OK。
      */
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteConfig(@PathVariable Long id) {
+    @DeleteMapping("/by-id")
+    public ResponseEntity<Void> deleteConfig(@RequestParam Long id) {
         systemConfigService.deleteConfig(id);
         return ResponseEntity.ok().build();
     }
+
+    /**
+     * 删除系统配置（异步）。
+     * 请求方法与路径：DELETE /api/configs/by-id/async（兼容 /api/v1/...）。
+     * 入参：id。
+     * 返回：202 ACCEPTED。
+     */
+    @DeleteMapping("/by-id/async")
+    public ResponseEntity<String> deleteConfigAsync(@RequestParam Long id) {
+        asyncDispatchService.dispatch(() -> systemConfigService.deleteConfig(id));
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body("ACCEPTED");
+    }
 }
+
+
 
 

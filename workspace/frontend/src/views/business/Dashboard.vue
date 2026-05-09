@@ -169,7 +169,7 @@
           <h2>版本提交与跟进</h2>
           <el-form :model="versionForm" label-width="120px">
             <el-form-item label="选择PSU">
-              <el-select v-model="selectedVersionPsuId" placeholder="请选择PSU">
+              <el-select v-model="selectedVersionPsuId" placeholder="请选择PSU" @change="onSelectedVersionPsuChange">
                 <el-option 
                   v-for="psu in psus" 
                   :key="psu.id" 
@@ -177,6 +177,25 @@
                   :value="psu.id">
                 </el-option>
               </el-select>
+            </el-form-item>
+            <el-form-item label="选择版本">
+              <el-select
+                v-model="selectedSubmitReviewId"
+                placeholder="请选择要提交/查看的版本"
+                :disabled="!selectedVersionPsuId"
+                style="width: 100%;"
+              >
+                <el-option
+                  v-for="item in submitVersionOptions"
+                  :key="item.versionNo"
+                  :label="`v${item.versionNo} / ${getStatusText(item.status)} / 变更:${formatDateTime(item.createdAt)}`"
+                  :value="item.versionNo"
+                />
+              </el-select>
+            </el-form-item>
+            <el-form-item>
+              <el-button @click="openSelectedSchemaSnapshot" :disabled="!selectedSubmitReviewId">查看JSON Schema详情</el-button>
+              <el-button @click="openSelectedPromptSnapshot" :disabled="!selectedSubmitReviewId">查看Prompt详情</el-button>
             </el-form-item>
             
             <el-form-item label="版本描述">
@@ -248,12 +267,40 @@
               </el-select>
             </el-form-item>
             <el-form-item label="Schema内容">
-              <el-input
-                v-model="schemaEditForm.schemaContent"
-                type="textarea"
-                :rows="15"
-                placeholder="请输入JSON Schema内容">
-              </el-input>
+              <div class="schema-param-editor">
+                <div class="schema-param-header">
+                  <span>按参数行编辑（参数名 / 类型 / 描述）</span>
+                  <el-button size="small" @click="addSchemaParamRow">添加参数</el-button>
+                </div>
+                <el-table class="table-neo schema-param-table" :data="schemaParamRows" style="width: 100%">
+                  <el-table-column label="参数名" min-width="240">
+                    <template #default="{ row }">
+                      <el-input v-model="row.name" placeholder="例如：userQuery" />
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="类型" width="180">
+                    <template #default="{ row }">
+                      <el-select v-model="row.type" placeholder="类型">
+                        <el-option
+                          v-for="type in schemaTypeOptions"
+                          :key="type"
+                          :label="type"
+                          :value="type" />
+                      </el-select>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="描述" min-width="260">
+                    <template #default="{ row }">
+                      <el-input v-model="row.description" placeholder="参数说明（可选）" />
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="操作" width="100">
+                    <template #default="{ $index }">
+                      <el-button type="danger" link @click="removeSchemaParamRow($index)">删除</el-button>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </div>
             </el-form-item>
             <el-form-item label="变更日志">
               <el-input
@@ -268,6 +315,27 @@
               <el-button @click="loadSchemaForEdit">加载最新版本</el-button>
             </el-form-item>
           </el-form>
+          <div class="test-dataset-section" v-if="selectedSchemaPsuId">
+            <div class="header-section">
+              <h3>测试数据</h3>
+              <el-button type="primary" size="small" @click="openCreateDatasetDialog">添加测试数据</el-button>
+            </div>
+            <el-table class="table-neo" :data="testDatasets" style="width: 100%; margin-top: 10px;" v-loading="loadingDatasets">
+              <el-table-column prop="id" label="ID" width="90"></el-table-column>
+              <el-table-column prop="name" label="名称" min-width="180"></el-table-column>
+              <el-table-column label="数据内容" min-width="220">
+                <template #default="{ row }">
+                  <el-button size="small" @click="viewDatasetData(row)">查看</el-button>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="220">
+                <template #default="{ row }">
+                  <el-button size="small" @click="editDataset(row)">编辑</el-button>
+                  <el-button size="small" type="danger" @click="deleteDataset(row)">删除</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
         </div>
 
         <!-- 版本审核 -->
@@ -298,6 +366,15 @@
               </template>
             </el-table-column>
             <el-table-column prop="rejectionReason" label="备注"></el-table-column>
+            <el-table-column label="操作" width="180">
+              <template #default="{ row }">
+                <template v-if="row.status === 'CANDIDATE'">
+                  <el-button size="small" type="success" @click="approveVersion(row)">通过</el-button>
+                  <el-button size="small" type="danger" @click="rejectVersion(row)">拒绝</el-button>
+                </template>
+                <span v-else>{{ getReviewResultText(row) }}</span>
+              </template>
+            </el-table-column>
           </el-table>
         </div>
 
@@ -395,13 +472,62 @@
         <el-button type="primary" @click="updatePsu">保存</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="showCreateDatasetDialog" :title="editingDatasetId ? '编辑测试数据' : '添加测试数据'" width="700px">
+      <el-form :model="datasetForm" label-width="100px">
+        <el-form-item label="名称">
+          <el-input v-model="datasetForm.name" placeholder="请输入测试数据名称"></el-input>
+        </el-form-item>
+        <el-form-item label="描述">
+          <el-input v-model="datasetForm.description" placeholder="请输入描述（可选）"></el-input>
+        </el-form-item>
+        <el-form-item label="数据内容">
+          <div class="schema-param-editor">
+            <div class="schema-param-header">
+              <span>按参数赋值（参数名 / 参数值）</span>
+            </div>
+            <el-table class="table-neo schema-param-table" :data="datasetParamRows" style="width: 100%">
+              <el-table-column label="参数名" min-width="240">
+                <template #default="{ row }">
+                  <span class="dataset-param-name">{{ row.name }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="参数值" min-width="340">
+                <template #default="{ row }">
+                  <div>
+                    <el-input v-model="row.value" placeholder="例如：你好 / 123 / true / {&quot;k&quot;:&quot;v&quot;}" />
+                    <div v-if="row.description" class="dataset-param-desc">{{ row.description }}</div>
+                  </div>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showCreateDatasetDialog = false">取消</el-button>
+        <el-button type="primary" @click="saveDataset">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="showViewDatasetDialog" title="测试数据详情" width="700px">
+      <el-input v-model="viewingDatasetData" type="textarea" :rows="14" readonly></el-input>
+    </el-dialog>
+
+    <el-dialog v-model="showVersionSchemaDialog" title="JSON Schema快照详情" width="760px">
+      <el-input v-model="selectedVersionSchemaSnapshot" type="textarea" :rows="18" readonly></el-input>
+    </el-dialog>
+
+    <el-dialog v-model="showVersionPromptDialog" title="Prompt快照详情" width="760px">
+      <el-input v-model="selectedVersionPromptSnapshot" type="textarea" :rows="18" readonly></el-input>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted, onBeforeUnmount, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { psuApi, schemaApi, promptApi, versionApi, versionReviewApi } from '@/services/api'
+import { psuApi, schemaApi, promptApi, testDatasetApi, versionApi, versionReviewApi } from '@/services/api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import ReleaseCenter from '@/views/developer/ReleaseCenter.vue'
 
@@ -414,6 +540,16 @@ const showCreatePsuDialog = ref(false)
 const showEditPsuDialog = ref(false)
 const loadingPsus = ref(false)
 const loadingVersions = ref(false)
+const loadingDatasets = ref(false)
+const showCreateDatasetDialog = ref(false)
+const showViewDatasetDialog = ref(false)
+const viewingDatasetData = ref('')
+const editingDatasetId = ref(null)
+const showVersionSchemaDialog = ref(false)
+const showVersionPromptDialog = ref(false)
+const selectedVersionSchemaSnapshot = ref('')
+const selectedVersionPromptSnapshot = ref('')
+const selectedSubmitReviewId = ref(null)
 
 // PSU数据
 const psus = ref([])
@@ -461,12 +597,28 @@ const schemaEditForm = reactive({
   schemaContent: '',
   changeLog: ''
 })
+const schemaTypeOptions = ['string', 'number', 'integer', 'boolean', 'array', 'object', 'null']
+const schemaParamRows = ref([])
+const testDatasets = ref([])
+const datasetForm = reactive({
+  name: '',
+  description: '',
+  dataContent: ''
+})
+const datasetParamRows = ref([])
 
 // 版本相关
 const versionForm = reactive({
   description: ''
 })
 const versionStatus = ref([])
+const submitPsuVersions = ref([])
+const submitVersionOptions = computed(() => {
+  if (!selectedVersionPsuId.value) return []
+  return submitPsuVersions.value
+    // 后端接口已保证仅返回“可提交审核”的版本。
+    .sort((a, b) => (Number(b.versionNo || 0) - Number(a.versionNo || 0)))
+})
 const generatedCodeInBusiness = ref('')
 
 // 提交状态
@@ -479,7 +631,7 @@ const isBusinessUser = ref(true)
 
 const goToPsuPreview = (psu) => {
   if (!psu?.id) return
-  router.push(`/business/psus/${psu.id}/preview`)
+  router.push({ path: '/business/psus/preview', query: { psuId: String(psu.id) } })
 }
 
 // 菜单选择处理
@@ -662,6 +814,72 @@ const inferType = (value) => {
   return 'string'
 }
 
+const createEmptySchemaParamRow = () => ({
+  name: '',
+  type: 'string',
+  description: ''
+})
+
+const addSchemaParamRow = () => {
+  schemaParamRows.value.push(createEmptySchemaParamRow())
+}
+
+const removeSchemaParamRow = (index) => {
+  schemaParamRows.value.splice(index, 1)
+  if (!schemaParamRows.value.length) {
+    schemaParamRows.value.push(createEmptySchemaParamRow())
+  }
+}
+
+const parseSchemaContentToRows = (schemaContent) => {
+  let parsed = schemaContent
+  if (typeof parsed === 'string') {
+    parsed = parsed?.trim() ? JSON.parse(parsed) : {}
+  }
+  const fields = parseSchemaFields(parsed || {})
+  if (!fields.length) {
+    schemaParamRows.value = [createEmptySchemaParamRow()]
+    return
+  }
+  schemaParamRows.value = fields.map((field) => ({
+    name: field.name || '',
+    type: field.type || 'string',
+    description: field.description || ''
+  }))
+}
+
+const buildSchemaContentFromRows = () => {
+  const rows = schemaParamRows.value
+    .map((row) => ({
+      name: String(row.name || '').trim(),
+      type: row.type || 'string',
+      description: String(row.description || '').trim()
+    }))
+    .filter((row) => row.name)
+
+  const duplicatedNames = rows
+    .map((row) => row.name)
+    .filter((name, index, arr) => arr.indexOf(name) !== index)
+  if (duplicatedNames.length) {
+    throw new Error(`参数名重复: ${[...new Set(duplicatedNames)].join(', ')}`)
+  }
+
+  const properties = {}
+  rows.forEach((row) => {
+    properties[row.name] = {
+      type: row.type
+    }
+    if (row.description) {
+      properties[row.name].description = row.description
+    }
+  })
+
+  return JSON.stringify({
+    type: 'object',
+    properties
+  })
+}
+
 const getPsuById = (id) => psus.value.find(item => item.id === id)
 
 const isPsuDraft = (id) => getPsuById(id)?.status === 'DRAFT'
@@ -685,6 +903,37 @@ const getStatusText = (status) => {
     case 'FORMAL': return '正式版本'
     case 'ARCHIVED': return '归档'
     default: return status
+  }
+}
+
+const getReviewResultText = (review) => {
+  if (review?.status === 'FORMAL') return '已审核通过'
+  if (review?.status === 'ARCHIVED') {
+    return review?.reviewedAt ? '已审核拒绝' : '已归档'
+  }
+  if (review?.status === 'DRAFT') return '草稿中'
+  return getStatusText(review?.status)
+}
+
+const getReviewSortTimestamp = (review) => {
+  const timeValue = review?.reviewedAt || review?.submittedAt || ''
+  const timestamp = Date.parse(timeValue)
+  return Number.isNaN(timestamp) ? 0 : timestamp
+}
+
+const formatPrettyJson = (value) => {
+  if (value == null || value === '') return '{}'
+  if (typeof value === 'string') {
+    try {
+      return JSON.stringify(JSON.parse(value), null, 2)
+    } catch {
+      return value
+    }
+  }
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return String(value)
   }
 }
 
@@ -878,16 +1127,22 @@ const loadSchemaForEdit = async () => {
   if (!selectedSchemaPsuId.value) {
     schemaEditForm.schemaContent = ''
     schemaEditForm.changeLog = ''
+    schemaParamRows.value = [createEmptySchemaParamRow()]
+    testDatasets.value = []
     return
   }
   try {
     const response = await schemaApi.getSchema(selectedSchemaPsuId.value)
     schemaEditForm.schemaContent = response.data?.schemaContent || '{}'
     schemaEditForm.changeLog = response.data?.changeLog || ''
+    parseSchemaContentToRows(schemaEditForm.schemaContent)
+    await loadTestDatasets()
   } catch (error) {
     console.error('加载Schema失败:', error)
     schemaEditForm.schemaContent = '{}'
     schemaEditForm.changeLog = ''
+    schemaParamRows.value = [createEmptySchemaParamRow()]
+    testDatasets.value = []
     ElMessage.error('加载Schema失败')
   }
 }
@@ -904,6 +1159,7 @@ const saveSchemaFromEditor = async () => {
     return
   }
   try {
+    schemaEditForm.schemaContent = buildSchemaContentFromRows()
     await schemaApi.updateSchema(selectedSchemaPsuId.value, {
       baseVersionNo: psu.versionNo,
       schemaContent: schemaEditForm.schemaContent,
@@ -911,10 +1167,188 @@ const saveSchemaFromEditor = async () => {
     })
     ElMessage.success('Schema保存成功')
     await loadPsus()
+    await loadTestDatasets()
   } catch (error) {
     console.error('保存Schema失败:', error)
-    ElMessage.error('保存Schema失败')
+    ElMessage.error(error?.message || '保存Schema失败')
   }
+}
+
+const loadTestDatasets = async () => {
+  if (!selectedSchemaPsuId.value) return
+  loadingDatasets.value = true
+  try {
+    const response = await testDatasetApi.getTestDatasets(selectedSchemaPsuId.value)
+    testDatasets.value = Array.isArray(response.data) ? response.data : []
+  } catch (error) {
+    console.error('加载测试数据失败:', error)
+    testDatasets.value = []
+  } finally {
+    loadingDatasets.value = false
+  }
+}
+
+const createEmptyDatasetParamRow = () => ({
+  name: '',
+  value: '',
+  description: ''
+})
+
+const buildDatasetRowsFromSchema = (dataContent) => {
+  let parsed = dataContent
+  try {
+    parsed = typeof parsed === 'string' ? JSON.parse(parsed || '{}') : (parsed || {})
+  } catch {
+    parsed = {}
+  }
+  const obj = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
+  const schemaRows = schemaParamRows.value.filter((row) => String(row.name || '').trim())
+  datasetParamRows.value = schemaRows.map((row) => {
+    const raw = obj[row.name]
+    return {
+      name: row.name,
+      description: row.description || '',
+      value: raw === undefined ? '' : (typeof raw === 'string' ? raw : JSON.stringify(raw))
+    }
+  })
+}
+
+const buildDatasetContentFromRows = () => {
+  const rows = datasetParamRows.value
+    .map((row) => ({
+      rawValue: String(row.value ?? '').trim()
+    }))
+
+  const payload = {}
+  datasetParamRows.value.forEach((row, idx) => {
+    const fieldName = row.name
+    const valueRow = rows[idx]
+    if (!fieldName) return
+    if (!valueRow?.rawValue) {
+      payload[fieldName] = ''
+      return
+    }
+    try {
+      payload[fieldName] = JSON.parse(valueRow.rawValue)
+    } catch {
+      payload[fieldName] = valueRow.rawValue
+    }
+  })
+  return JSON.stringify(payload)
+}
+
+const countFilledDatasetValues = () => {
+  return datasetParamRows.value.filter((row) => String(row.value ?? '').trim() !== '').length
+}
+
+const ensureDatasetSchemaRowsReady = () => {
+  if (!schemaParamRows.value.length) {
+    throw new Error('当前Schema未定义可填写参数，请先维护Schema字段')
+  }
+  if (!datasetParamRows.value.length) {
+    buildDatasetRowsFromSchema('{}')
+  }
+}
+
+const resetDatasetForm = () => {
+  editingDatasetId.value = null
+  datasetForm.name = ''
+  datasetForm.description = ''
+  datasetForm.dataContent = ''
+  datasetParamRows.value = []
+}
+
+const openCreateDatasetDialog = () => {
+  resetDatasetForm()
+  try {
+    ensureDatasetSchemaRowsReady()
+  } catch (error) {
+    ElMessage.warning(error.message || '请先维护Schema字段')
+    return
+  }
+  showCreateDatasetDialog.value = true
+}
+
+const parseDatasetContentToRows = (dataContent) => {
+  buildDatasetRowsFromSchema(dataContent)
+}
+
+const saveDataset = async () => {
+  if (!selectedSchemaPsuId.value) {
+    ElMessage.warning('请先选择PSU')
+    return
+  }
+  if (!datasetForm.name) {
+    ElMessage.warning('请填写名称')
+    return
+  }
+  try {
+    ensureDatasetSchemaRowsReady()
+    if (!countFilledDatasetValues()) {
+      ElMessage.warning('请至少填写一个参数值')
+      return
+    }
+    datasetForm.dataContent = buildDatasetContentFromRows()
+    if (editingDatasetId.value) {
+      await testDatasetApi.updateTestDataset(editingDatasetId.value, {
+        name: datasetForm.name,
+        description: datasetForm.description,
+        dataContent: datasetForm.dataContent
+      })
+      ElMessage.success('测试数据更新成功')
+    } else {
+      await testDatasetApi.createTestDataset(selectedSchemaPsuId.value, {
+        name: datasetForm.name,
+        description: datasetForm.description,
+        dataContent: datasetForm.dataContent
+      })
+      ElMessage.success('测试数据创建成功')
+    }
+    showCreateDatasetDialog.value = false
+    resetDatasetForm()
+    await loadTestDatasets()
+  } catch (error) {
+    console.error('保存测试数据失败:', error)
+    ElMessage.error('保存测试数据失败')
+  }
+}
+
+const editDataset = (dataset) => {
+  editingDatasetId.value = dataset.id
+  datasetForm.name = dataset.name || ''
+  datasetForm.description = dataset.description || ''
+  datasetForm.dataContent = dataset.dataContent || '{}'
+  try {
+    ensureDatasetSchemaRowsReady()
+    parseDatasetContentToRows(datasetForm.dataContent)
+  } catch (error) {
+    ElMessage.warning(error.message || '请先维护Schema字段')
+    return
+  }
+  showCreateDatasetDialog.value = true
+}
+
+const deleteDataset = async (dataset) => {
+  try {
+    await ElMessageBox.confirm(`确定删除测试数据 "${dataset.name}" 吗？`, '确认删除', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+    await testDatasetApi.deleteTestDataset(dataset.id)
+    ElMessage.success('测试数据已删除')
+    await loadTestDatasets()
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('删除测试数据失败:', error)
+      ElMessage.error('删除测试数据失败')
+    }
+  }
+}
+
+const viewDatasetData = (dataset) => {
+  viewingDatasetData.value = dataset.dataContent || ''
+  showViewDatasetDialog.value = true
 }
 
 // 业务侧代码生成
@@ -962,15 +1396,150 @@ const submitVersion = async () => {
   
   submitting.value = true
   try {
-    await versionApi.submitVersion(selectedVersionPsuId.value)
+    if (selectedSubmitReviewId.value) {
+      const selectedReview = versionStatus.value.find(
+        item => item.psuId === selectedVersionPsuId.value && item.versionNo === selectedSubmitReviewId.value
+      )
+      if (selectedReview && selectedReview.status !== 'CANDIDATE') {
+        ElMessage.warning('当前选中版本已存在审核结果，请选择候选版本或重新创建候选版本')
+        submitting.value = false
+        return
+      }
+    }
+    await versionApi.submitVersion(selectedVersionPsuId.value, selectedSubmitReviewId.value)
     ElMessage.success('版本提交成功，等待研发审核')
     submitting.value = false
     versionForm.description = ''
-    loadVersionStatus()
+    await loadVersionStatus()
+    await onSelectedVersionPsuChange(selectedVersionPsuId.value)
   } catch (error) {
     console.error('提交版本失败:', error)
     ElMessage.error('提交失败')
     submitting.value = false
+  }
+}
+
+const onSelectedVersionPsuChange = async (psuId) => {
+  const pid = Number(psuId)
+  if (!Number.isInteger(pid) || pid <= 0) {
+    submitPsuVersions.value = []
+    selectedSubmitReviewId.value = null
+    return
+  }
+  const psu = psus.value.find(item => item.id === pid)
+  if (!psu?.psuId) {
+    submitPsuVersions.value = []
+    selectedSubmitReviewId.value = null
+    return
+  }
+  try {
+    const response = await psuApi.getSubmittablePsuVersions(psu.psuId)
+    submitPsuVersions.value = Array.isArray(response.data) ? response.data : []
+  } catch (error) {
+    console.error('加载PSU版本历史失败:', error)
+    submitPsuVersions.value = []
+    ElMessage.error('加载PSU版本历史失败')
+  }
+  const firstSubmittable = submitVersionOptions.value[0]
+  selectedSubmitReviewId.value = firstSubmittable?.versionNo || null
+}
+
+const openSelectedSchemaSnapshot = async () => {
+  if (!selectedSubmitReviewId.value) {
+    ElMessage.warning('请先选择版本')
+    return
+  }
+  try {
+    const review = versionStatus.value.find(
+      item => item.psuId === selectedVersionPsuId.value && item.versionNo === selectedSubmitReviewId.value
+    )
+    if (!review?.id) {
+      ElMessage.warning('该版本尚未进入审核，暂无审核快照可查看')
+      return
+    }
+    const response = await versionReviewApi.getReviewSnapshot(review.id)
+    const snapshot = response.data || {}
+    selectedVersionSchemaSnapshot.value = formatPrettyJson(snapshot.specJsonSnapshot)
+    showVersionSchemaDialog.value = true
+  } catch (error) {
+    console.error('加载Schema快照失败:', error)
+    ElMessage.error(error.response?.data?.message || '加载Schema快照失败')
+  }
+}
+
+const openSelectedPromptSnapshot = async () => {
+  if (!selectedSubmitReviewId.value) {
+    ElMessage.warning('请先选择版本')
+    return
+  }
+  try {
+    const review = versionStatus.value.find(
+      item => item.psuId === selectedVersionPsuId.value && item.versionNo === selectedSubmitReviewId.value
+    )
+    if (!review?.id) {
+      ElMessage.warning('该版本尚未进入审核，暂无审核快照可查看')
+      return
+    }
+    const response = await versionReviewApi.getReviewSnapshot(review.id)
+    const snapshot = response.data || {}
+    selectedVersionPromptSnapshot.value = snapshot.promptContentSnapshot || ''
+    showVersionPromptDialog.value = true
+  } catch (error) {
+    console.error('加载Prompt快照失败:', error)
+    ElMessage.error(error.response?.data?.message || '加载Prompt快照失败')
+  }
+}
+
+const approveVersion = async (review) => {
+  try {
+    await ElMessageBox.confirm(
+      `确认通过 PSU ${review.psuId} 的版本 ${review.versionNo} 吗？`,
+      '版本审核',
+      {
+        confirmButtonText: '通过',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    await versionReviewApi.reviewVersion(review.id, {
+      approved: true
+    })
+    ElMessage.success('版本审核通过')
+    await loadVersionStatus()
+    await loadPsus()
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('审核通过失败:', error)
+      ElMessage.error(error.response?.data?.message || '审核通过失败')
+    }
+  }
+}
+
+const rejectVersion = async (review) => {
+  try {
+    const { value } = await ElMessageBox.prompt(
+      `请输入拒绝原因（PSU ${review.psuId} / 版本 ${review.versionNo}）`,
+      '拒绝审核',
+      {
+        confirmButtonText: '提交拒绝',
+        cancelButtonText: '取消',
+        inputPattern: /^.{2,500}$/,
+        inputErrorMessage: '拒绝原因至少2个字符'
+      }
+    )
+    await versionReviewApi.reviewVersion(review.id, {
+      approved: false,
+      rejectionReason: value,
+      rejectionType: 'BACK_TO_BIZ'
+    })
+    ElMessage.success('版本已拒绝')
+    await loadVersionStatus()
+    await loadPsus()
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('拒绝审核失败:', error)
+      ElMessage.error(error.response?.data?.message || '拒绝审核失败')
+    }
   }
 }
 
@@ -994,9 +1563,13 @@ const loadVersionStatus = async () => {
   loadingVersions.value = true
   try {
     const response = await versionReviewApi.getVersionReviews()
-    versionStatus.value = Array.isArray(response.data)
+    const rawList = Array.isArray(response.data)
       ? response.data
       : (Array.isArray(response.data?.content) ? response.data.content : [])
+    versionStatus.value = [...rawList].sort((a, b) => getReviewSortTimestamp(b) - getReviewSortTimestamp(a))
+    if (selectedVersionPsuId.value) {
+      await onSelectedVersionPsuChange(selectedVersionPsuId.value)
+    }
   } catch (error) {
     console.error('加载版本状态失败:', error)
     versionStatus.value = []
@@ -1006,6 +1579,8 @@ const loadVersionStatus = async () => {
 }
 
 onMounted(() => {
+  schemaParamRows.value = [createEmptySchemaParamRow()]
+  datasetParamRows.value = []
   loadSchemaPsuOptions()
   const menu = route.query.menu
   const queryPsuId = Number(route.query.psuId)
@@ -1180,6 +1755,40 @@ onBeforeUnmount(() => {
 .variable-tag {
   margin: 5px;
   cursor: pointer;
+}
+
+.schema-param-editor {
+  width: 100%;
+  border: 1px solid var(--neo-border);
+  border-radius: var(--neo-radius-md);
+  background: rgba(7, 19, 35, 0.7);
+  padding: 10px;
+}
+
+.schema-param-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--neo-text-dim);
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.schema-param-table {
+  border-radius: var(--neo-radius-sm);
+}
+
+.dataset-param-name {
+  color: var(--neo-text);
+  font-weight: 600;
+}
+
+.dataset-param-desc {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--neo-text-dim);
+  line-height: 1.4;
 }
 
 .input-field {

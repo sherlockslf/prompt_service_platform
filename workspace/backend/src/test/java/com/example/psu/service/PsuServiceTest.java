@@ -130,7 +130,7 @@ class PsuServiceTest {
         when(psuRepository.findAll(any(Pageable.class))).thenReturn(psuPage);
 
         // 执行测试
-        Page<PsuUnit> result = psuService.getPsus(1, 10);
+        Page<PsuUnit> result = psuService.getPsus(1, 10, null);
 
         // 验证结果
         assertNotNull(result);

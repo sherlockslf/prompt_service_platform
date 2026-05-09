@@ -6,19 +6,13 @@ import com.example.psu.dto.response.CompositionRenderResponse;
 import com.example.psu.dto.response.CompositionResponse;
 import com.example.psu.dto.response.CompositionValidateResponse;
 import com.example.psu.entity.PromptComposition;
+import com.example.psu.service.AsyncDispatchService;
 import com.example.psu.service.CompositionService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 import java.util.Optional;
@@ -27,25 +21,30 @@ import java.util.Optional;
  * 编排控制器
  */
 @RestController
-@RequestMapping({"/api/compositions", "/api/v1/compositions"})
+@RequestMapping("/api/compositions")
 public class CompositionController {
 
     private static final Long DEFAULT_OPERATOR_ID = 0L;
 
     private final CompositionService compositionService;
     private final ObjectMapper objectMapper;
+    private final AsyncDispatchService asyncDispatchService;
 
     public CompositionController(
         CompositionService compositionService,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        AsyncDispatchService asyncDispatchService
     ) {
         this.compositionService = compositionService;
         this.objectMapper = objectMapper;
+        this.asyncDispatchService = asyncDispatchService;
     }
 
     /**
-     * 业务侧动态容器编排页面获取指定PSU的编排内容
-     * 参数：psuId-PSU数据库ID
+     * 查询指定 PSU 的编排草稿/当前编排。
+     * 请求方法与路径：GET /api/compositions（兼容 /api/v1/...）。
+     * 入参：psuId（query 参数）。
+     * 返回：CompositionResponse；不存在时返回 404 错误体。
      */
     @GetMapping
     public ResponseEntity<?> getComposition(@RequestParam Long psuId) {
@@ -57,8 +56,10 @@ public class CompositionController {
     }
 
     /**
-     * 业务侧动态容器编排页面保存编排草稿
-     * 参数：psuId-PSU数据库ID，content-编排JSON内容，specJson-规格配置
+     * 保存编排草稿（同步）。
+     * 请求方法与路径：PUT /api/compositions（兼容 /api/v1/...）。
+     * 入参：psuId（query）+ CompositionSaveRequest。
+     * 返回：保存后的 CompositionResponse。
      */
     @PutMapping
     public ResponseEntity<?> saveDraft(@RequestParam Long psuId, @RequestBody CompositionSaveRequest request) {
@@ -67,8 +68,22 @@ public class CompositionController {
     }
 
     /**
-     * 业务侧动态容器编排页面校验编排内容合法性
-     * 参数：psuId-PSU数据库ID，content-待校验的编排JSON
+     * 保存编排草稿（异步）。
+     * 请求方法与路径：PUT /api/compositions/async（兼容 /api/v1/...）。
+     * 入参：psuId（query）+ CompositionSaveRequest。
+     * 返回：202 ACCEPTED。
+     */
+    @PostMapping("/async")
+    public ResponseEntity<String> saveDraftAsync(@RequestParam Long psuId, @RequestBody CompositionSaveRequest request) {
+        asyncDispatchService.dispatch(() -> compositionService.saveDraft(psuId, request, DEFAULT_OPERATOR_ID));
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body("ACCEPTED");
+    }
+
+    /**
+     * 校验编排内容（同步）。
+     * 请求方法与路径：POST /api/compositions/validate（兼容 /api/v1/...）。
+     * 入参：psuId（query）+ CompositionSaveRequest。
+     * 返回：CompositionValidateResponse。
      */
     @PostMapping("/validate")
     public ResponseEntity<CompositionValidateResponse> validate(@RequestParam Long psuId, @RequestBody CompositionSaveRequest request) {
@@ -76,8 +91,22 @@ public class CompositionController {
     }
 
     /**
-     * 业务侧动态容器编排页面渲染编排内容（替换变量占位符）
-     * 参数：psuId-PSU数据库ID，variables-变量键值对
+     * 校验编排内容（异步）。
+     * 请求方法与路径：POST /api/compositions/validate/async（兼容 /api/v1/...）。
+     * 入参：psuId（query）+ CompositionSaveRequest。
+     * 返回：202 ACCEPTED。
+     */
+    @PostMapping("/validate/async")
+    public ResponseEntity<String> validateAsync(@RequestParam Long psuId, @RequestBody CompositionSaveRequest request) {
+        asyncDispatchService.dispatch(() -> compositionService.validate(psuId, request));
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body("ACCEPTED");
+    }
+
+    /**
+     * 渲染编排内容（同步）。
+     * 请求方法与路径：POST /api/compositions/render（兼容 /api/v1/...）。
+     * 入参：psuId（query）+ CompositionRenderRequest（input、compositionId 可选）。
+     * 返回：CompositionRenderResponse（renderedPrompt、missingVars、usedVars）。
      */
     @PostMapping("/render")
     public ResponseEntity<CompositionRenderResponse> render(@RequestParam Long psuId, @RequestBody CompositionRenderRequest request) {
@@ -85,8 +114,22 @@ public class CompositionController {
     }
 
     /**
-     * 业务侧动态容器编排页面提交编排进入审核流程
-     * 参数：psuId-PSU数据库ID
+     * 渲染编排内容（异步）。
+     * 请求方法与路径：POST /api/compositions/render/async（兼容 /api/v1/...）。
+     * 入参：psuId（query）+ CompositionRenderRequest。
+     * 返回：202 ACCEPTED。
+     */
+    @PostMapping("/render/async")
+    public ResponseEntity<String> renderAsync(@RequestParam Long psuId, @RequestBody CompositionRenderRequest request) {
+        asyncDispatchService.dispatch(() -> compositionService.render(psuId, request));
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body("ACCEPTED");
+    }
+
+    /**
+     * 提交编排进入审核流程（同步）。
+     * 请求方法与路径：POST /api/compositions/submit（兼容 /api/v1/...）。
+     * 入参：psuId（query）。
+     * 返回：提交后的 CompositionResponse（状态通常为 CANDIDATE）。
      */
     @PostMapping("/submit")
     public ResponseEntity<?> submit(@RequestParam Long psuId) {
@@ -95,11 +138,25 @@ public class CompositionController {
     }
 
     /**
-     * 编排审核快照页面获取最新编排快照版本
-     * 参数：compositionId-编排数据库ID
+     * 提交编排进入审核流程（异步）。
+     * 请求方法与路径：POST /api/compositions/submit/async（兼容 /api/v1/...）。
+     * 入参：psuId（query）。
+     * 返回：202 ACCEPTED。
      */
-    @GetMapping("/{compositionId}/revisions/latest")
-    public ResponseEntity<?> getLatestRevision(@PathVariable Long compositionId) {
+    @PostMapping("/submit/async")
+    public ResponseEntity<String> submitAsync(@RequestParam Long psuId) {
+        asyncDispatchService.dispatch(() -> compositionService.submit(psuId, DEFAULT_OPERATOR_ID));
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body("ACCEPTED");
+    }
+
+    /**
+     * 查询编排最近一次快照。
+     * 请求方法与路径：GET /api/compositions/by-compositionId/revisions/latest（兼容 /api/v1/...）。
+     * 入参：compositionId。
+     * 返回：PromptCompositionRevision；不存在时返回 404 错误体。
+     */
+    @GetMapping("/by-compositionId/revisions/latest")
+    public ResponseEntity<?> getLatestRevision(@RequestParam Long compositionId) {
         return compositionService.getLatestRevision(compositionId)
             .<ResponseEntity<?>>map(ResponseEntity::ok)
             .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "Revision not found")));
@@ -128,5 +185,7 @@ public class CompositionController {
         return response;
     }
 }
+
+
 
 

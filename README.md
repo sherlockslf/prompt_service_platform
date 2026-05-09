@@ -1,7 +1,7 @@
 # Prompt Service Platform
 
-**文档版本**：V2.0（文件清单与测试链路同步）  
-**版本时间**：2026-05-08
+**文档版本**：V2.1（文件清单与测试链路同步）  
+**版本时间**：2026-05-09
 
 > 目标：构建一个面向企业内部的 Prompt 研发平台，覆盖提示词模板研发、服务化发布、版本治理、测试评估与可追溯运营。
 
@@ -21,7 +21,7 @@
 
 ### 2.1 技术栈
 
-- 后端：Java 17、Spring Boot 3.2、Spring Data JPA、MySQL 8、Redis（预留未启用）、Spring Security、Swagger
+- 后端：Java 21、Spring Boot 3.5.x、Spring Data JPA、MySQL 8、Redis（预留未启用）、Spring Security、Swagger
 - 前端：Vue 3、Element Plus、Pinia、Vue Router、Axios、Vite
 
 ### 2.2 工程目录
@@ -191,8 +191,44 @@ sequenceDiagram
 - 发布管理：支持发布单创建、审批、执行、历史查询
 - 灰度路由：支持白名单/标签/比例策略并在 `resolve` 链路执行命中
 - 生效版本指针：支持稳定版本与灰度版本路由切换，并记录回滚历史
+- 可提审版本后端判定：支持 `GET /api/psus/by-psuId/submittable-versions`，由后端统一过滤可提交版本
+- 历史版本提审：支持 `POST /api/versions/by-psuId/submit?psuId={id}&versionNo={n}` 显式提交指定版本
 - 审核预览增强：`/api/versions/{reviewId}/preview` 已回传参数集快照，前端可直观看到预览输入上下文
 - Git台账登记：支持 `POST /api/versions/{reviewId}/git-commit`，并新增 hash 格式校验与前端登记入口
+
+## 4.8 版本模型（2026-05-09 更新）
+
+- `Schema`/`Prompt` 是实际生效内容版本（实体版本）。
+- `PSU versionNo` 是业务指针版本：该版本指向一组 `schemaVersionNo + promptVersionNo`。
+- 审核记录 `ai_prompt_version_reviews` 保存版本三元组指针：
+  - `version_no`（PSU 指针版本）
+  - `schema_version_no`
+  - `composition_id + composition_revision_no`（Prompt 指针）
+- 发布记录 `ai_prompt_release_versions` 保留每个 PSU 的标签指针：
+  - `FORMAL` / `PREVIEW` 最多各一条有效指针
+  - 每条指针记录绑定 `psu_version_no + json_schema_version_no + prompt_version_no`
+- 对外 resolve 生效逻辑以发布指针为准，不以“当前最新草稿”推断。
+
+### 4.8.1 指针流转图（PSU -> 审核 -> 发布 -> Resolve）
+
+```mermaid
+flowchart LR
+    A[PSU版本快照<br/>ai_prompt_psu_versions<br/>psu_version_no + schema_version_no + prompt_version_no]
+    B[提交审核<br/>ai_prompt_version_reviews<br/>保存三元组指针]
+    C[审核通过/驳回<br/>FORMAL or ARCHIVED]
+    D[发布标签指针<br/>ai_prompt_release_versions<br/>FORMAL / PREVIEW]
+    E[线上解析<br/>/api/prompt-service/resolve]
+    F[加载Schema与Prompt内容<br/>按发布指针精确定位版本]
+
+    A --> B --> C --> D --> E --> F
+
+    classDef data fill:#fff7ed,color:#9a3412,stroke:#f97316;
+    classDef proc fill:#dcfce7,color:#166534,stroke:#16a34a;
+    classDef api fill:#dbeafe,color:#1e3a8a,stroke:#1d4ed8;
+    class A,B,D data;
+    class C,F proc;
+    class E api;
+```
 
 ### 4.3 模块3：Schema + 测试集（已实现部分）
 
@@ -460,7 +496,9 @@ powershell -ExecutionPolicy Bypass -File workspace\tools\psu_integration\run_all
 
 ### 9.2 一致性约定
 
-- 覆盖写语义：`ai_prompt_json_schemas` 与 `ai_prompt_param_sets` 以 `psu_id` 唯一约束覆盖更新。
+- 多版本语义：`ai_prompt_json_schemas` 使用 `(psu_id, version)` 唯一约束，保留历史版本。
+- PSU版本历史：`ai_prompt_psu_versions` 使用 `(psu_id, version_no)` 唯一约束，记录每次版本快照及 schema/prompt 指针。
+- 参数集语义：`ai_prompt_param_sets` 仍为覆盖写（按 `psu_id` 唯一）。
 - 编排唯一性：`ai_prompt_compositions` 对 `psu_id` 唯一，快照表 `ai_prompt_composition_revisions` 对 `(composition_id, revision_no)` 唯一。
 - 版本唯一性：`ai_prompt_version_reviews` 对 `(psu_id, version_no)` 唯一。
 - 生效指针唯一性：`ai_prompt_live_versions` 对 `(psu_id, environment)` 唯一。

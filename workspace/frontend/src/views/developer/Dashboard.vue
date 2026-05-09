@@ -95,12 +95,40 @@
               </el-select>
             </el-form-item>
             <el-form-item label="Schema内容">
-              <el-input 
-                v-model="schemaForm.schemaContent" 
-                type="textarea" 
-                :rows="15" 
-                placeholder="请输入JSON Schema内容">
-              </el-input>
+              <div class="schema-param-editor">
+                <div class="schema-param-header">
+                  <span>按参数行编辑（参数名 / 类型 / 描述）</span>
+                  <el-button size="small" @click="addSchemaParamRow">添加参数</el-button>
+                </div>
+                <el-table :data="schemaParamRows" style="width: 100%">
+                  <el-table-column label="参数名" min-width="240">
+                    <template #default="{ row }">
+                      <el-input v-model="row.name" placeholder="例如：userQuery" />
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="类型" width="180">
+                    <template #default="{ row }">
+                      <el-select v-model="row.type" placeholder="类型">
+                        <el-option
+                          v-for="type in schemaTypeOptions"
+                          :key="type"
+                          :label="type"
+                          :value="type" />
+                      </el-select>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="描述" min-width="260">
+                    <template #default="{ row }">
+                      <el-input v-model="row.description" placeholder="参数说明（可选）" />
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="操作" width="100">
+                    <template #default="{ $index }">
+                      <el-button type="danger" link @click="removeSchemaParamRow($index)">删除</el-button>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </div>
             </el-form-item>
             <el-form-item label="变更日志">
               <el-input 
@@ -170,7 +198,7 @@
           <div class="test-dataset-section" v-if="selectedPsuId">
             <div class="section-header">
               <h3>测试数据集</h3>
-              <el-button type="primary" size="small" @click="showCreateDatasetDialog = true">新建数据集</el-button>
+              <el-button type="primary" size="small" @click="openCreateDatasetDialog">新建数据集</el-button>
             </div>
             <el-table :data="testDatasets" style="width: 100%; margin-top: 10px;" v-loading="loadingDatasets">
               <el-table-column prop="name" label="数据集名称" width="200"></el-table-column>
@@ -421,12 +449,26 @@
           <el-input v-model="datasetForm.description" type="textarea" :rows="2" placeholder="请输入描述"></el-input>
         </el-form-item>
         <el-form-item label="数据内容">
-          <el-input 
-            v-model="datasetForm.dataContent" 
-            type="textarea" 
-            :rows="10" 
-            placeholder="请输入JSON格式的测试数据">
-          </el-input>
+          <div class="dataset-param-editor">
+            <div class="dataset-param-header">
+              <span>按参数赋值（参数名 / 参数值）</span>
+            </div>
+            <el-table :data="datasetParamRows" style="width: 100%">
+              <el-table-column label="参数名" min-width="240">
+                <template #default="{ row }">
+                  <span class="dataset-param-name">{{ row.name }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="参数值" min-width="340">
+                <template #default="{ row }">
+                  <div>
+                    <el-input v-model="row.value" placeholder="例如：你好 / 123 / true / {&quot;k&quot;:&quot;v&quot;}" />
+                    <div v-if="row.description" class="dataset-param-desc">{{ row.description }}</div>
+                  </div>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -491,6 +533,8 @@ const schemaForm = reactive({
   schemaContent: '',
   changeLog: ''
 })
+const schemaTypeOptions = ['string', 'number', 'integer', 'boolean', 'array', 'object', 'null']
+const schemaParamRows = ref([])
 const paramSetForm = reactive({
   paramSetContent: '{}',
   changeLog: ''
@@ -528,6 +572,7 @@ const datasetForm = reactive({
   description: '',
   dataContent: ''
 })
+const datasetParamRows = ref([])
 const viewingDatasetData = ref('')
 
 // 表单验证规则
@@ -611,7 +656,7 @@ const rollbackVersion = async (review) => {
 
 // 跳转审核预览页面，便于在审核前查看参数集渲染效果
 const goReviewPreview = (review) => {
-  router.push(`/developer/psus/${review.psuId}/reviews/${review.id}`)
+  router.push({ path: '/developer/psus/reviews', query: { psuId: String(review.psuId), reviewId: String(review.id) } })
 }
 
 const focusedReviewId = computed(() => {
@@ -841,6 +886,90 @@ const formatDateTime = (dateTime) => {
   })
 }
 
+const createEmptySchemaParamRow = () => ({
+  name: '',
+  type: 'string',
+  description: ''
+})
+
+const addSchemaParamRow = () => {
+  schemaParamRows.value.push(createEmptySchemaParamRow())
+}
+
+const removeSchemaParamRow = (index) => {
+  schemaParamRows.value.splice(index, 1)
+  if (!schemaParamRows.value.length) {
+    schemaParamRows.value.push(createEmptySchemaParamRow())
+  }
+}
+
+const inferSchemaType = (value) => {
+  if (value === null || value === undefined) return 'null'
+  if (Array.isArray(value)) return 'array'
+  const t = typeof value
+  if (t === 'number') return 'number'
+  if (t === 'boolean') return 'boolean'
+  if (t === 'object') return 'object'
+  return 'string'
+}
+
+const parseSchemaContentToRows = (schemaContent) => {
+  let parsed = schemaContent
+  if (typeof parsed === 'string') {
+    parsed = parsed?.trim() ? JSON.parse(parsed) : {}
+  }
+  const schemaObj = parsed || {}
+  const rows = []
+  if (schemaObj.properties && typeof schemaObj.properties === 'object') {
+    Object.entries(schemaObj.properties).forEach(([name, prop]) => {
+      rows.push({
+        name,
+        type: prop?.type || 'string',
+        description: prop?.description || ''
+      })
+    })
+  } else if (typeof schemaObj === 'object' && !Array.isArray(schemaObj)) {
+    Object.entries(schemaObj).forEach(([name, value]) => {
+      rows.push({
+        name,
+        type: inferSchemaType(value),
+        description: ''
+      })
+    })
+  }
+  schemaParamRows.value = rows.length ? rows : [createEmptySchemaParamRow()]
+}
+
+const buildSchemaContentFromRows = () => {
+  const rows = schemaParamRows.value
+    .map((row) => ({
+      name: String(row.name || '').trim(),
+      type: row.type || 'string',
+      description: String(row.description || '').trim()
+    }))
+    .filter((row) => row.name)
+
+  const duplicatedNames = rows
+    .map((row) => row.name)
+    .filter((name, index, arr) => arr.indexOf(name) !== index)
+  if (duplicatedNames.length) {
+    throw new Error(`参数名重复: ${[...new Set(duplicatedNames)].join(', ')}`)
+  }
+
+  const properties = {}
+  rows.forEach((row) => {
+    properties[row.name] = { type: row.type }
+    if (row.description) {
+      properties[row.name].description = row.description
+    }
+  })
+
+  return JSON.stringify({
+    type: 'object',
+    properties
+  })
+}
+
 // 保存Schema
 const saveSchema = async () => {
   const psu = getPsuById(selectedPsuId.value)
@@ -849,27 +978,32 @@ const saveSchema = async () => {
     return
   }
   try {
-    await api.put(`/schemas/${selectedPsuId.value}`, {
+    schemaForm.schemaContent = buildSchemaContentFromRows()
+    await api.post('/schemas/by-psuId', {
       baseVersionNo: psu.versionNo,
       schemaContent: schemaForm.schemaContent,
       changeLog: schemaForm.changeLog
-    })
+    }, { params: { psuId: selectedPsuId.value } })
     ElMessage.success('Schema保存成功')
     await loadPsus()
   } catch (error) {
     console.error('保存Schema失败:', error)
-    ElMessage.error('保存Schema失败')
+    ElMessage.error(error?.message || '保存Schema失败')
   }
 }
 
 // 加载Schema
 const loadSchema = async () => {
-  if (!selectedPsuId.value) return
+  if (!selectedPsuId.value) {
+    schemaParamRows.value = [createEmptySchemaParamRow()]
+    return
+  }
   
   try {
     const response = await schemaApi.getSchema(selectedPsuId.value)
     schemaForm.schemaContent = response.data.schemaContent
     schemaForm.changeLog = response.data.changeLog || ''
+    parseSchemaContentToRows(schemaForm.schemaContent)
     await loadParamSet()
     await loadSchemaVersions()
     // 加载Schema后同时加载测试数据集
@@ -878,6 +1012,7 @@ const loadSchema = async () => {
     console.error('加载Schema失败:', error)
     schemaForm.schemaContent = '{}'
     schemaForm.changeLog = ''
+    schemaParamRows.value = [createEmptySchemaParamRow()]
   }
 }
 
@@ -897,14 +1032,102 @@ const loadTestDatasets = async () => {
   }
 }
 
+const createEmptyDatasetParamRow = () => ({
+  name: '',
+  value: '',
+  description: ''
+})
+
+const buildDatasetRowsFromSchema = (dataContent) => {
+  let parsed = dataContent
+  try {
+    parsed = typeof parsed === 'string' ? JSON.parse(parsed || '{}') : (parsed || {})
+  } catch {
+    parsed = {}
+  }
+  const obj = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
+  const schemaRows = schemaParamRows.value.filter((row) => String(row.name || '').trim())
+  datasetParamRows.value = schemaRows.map((row) => {
+    const raw = obj[row.name]
+    return {
+      name: row.name,
+      description: row.description || '',
+      value: raw === undefined ? '' : (typeof raw === 'string' ? raw : JSON.stringify(raw))
+    }
+  })
+}
+
+const buildDatasetContentFromRows = () => {
+  const rows = datasetParamRows.value
+    .map((row) => ({
+      rawValue: String(row.value ?? '').trim()
+    }))
+
+  const payload = {}
+  datasetParamRows.value.forEach((row, idx) => {
+    const fieldName = row.name
+    const valueRow = rows[idx]
+    if (!fieldName) {
+      return
+    }
+    if (!valueRow?.rawValue) {
+      payload[fieldName] = ''
+      return
+    }
+    try {
+      payload[fieldName] = JSON.parse(valueRow.rawValue)
+    } catch {
+      payload[fieldName] = valueRow.rawValue
+    }
+  })
+  return JSON.stringify(payload)
+}
+
+const countFilledDatasetValues = () => {
+  return datasetParamRows.value.filter((row) => String(row.value ?? '').trim() !== '').length
+}
+
+const ensureDatasetSchemaRowsReady = () => {
+  if (!schemaParamRows.value.length) {
+    throw new Error('当前Schema未定义可填写参数，请先维护Schema字段')
+  }
+  if (!datasetParamRows.value.length) {
+    buildDatasetRowsFromSchema('{}')
+  }
+}
+
+const openCreateDatasetDialog = () => {
+  resetDatasetForm()
+  try {
+    ensureDatasetSchemaRowsReady()
+  } catch (error) {
+    ElMessage.warning(error.message || '请先维护Schema字段')
+    return
+  }
+  showCreateDatasetDialog.value = true
+}
+
+const parseDatasetContentToRows = (dataContent) => {
+  buildDatasetRowsFromSchema(dataContent)
+}
+
+const buildDatasetPayloadOrThrow = () => {
+  ensureDatasetSchemaRowsReady()
+  if (!countFilledDatasetValues()) {
+    throw new Error('请至少填写一个参数值')
+  }
+  return buildDatasetContentFromRows()
+}
+
 // 保存测试数据集
 const saveDataset = async () => {
-  if (!datasetForm.name || !datasetForm.dataContent) {
-    ElMessage.warning('请填写数据集名称和数据内容')
+  if (!datasetForm.name) {
+    ElMessage.warning('请填写数据集名称')
     return
   }
   
   try {
+    datasetForm.dataContent = buildDatasetPayloadOrThrow()
     if (editingDatasetId.value) {
       await testDatasetApi.updateTestDataset(editingDatasetId.value, {
         name: datasetForm.name,
@@ -934,7 +1157,14 @@ const editDataset = (dataset) => {
   editingDatasetId.value = dataset.id
   datasetForm.name = dataset.name
   datasetForm.description = dataset.description || ''
-  datasetForm.dataContent = dataset.dataContent
+  datasetForm.dataContent = dataset.dataContent || '{}'
+  try {
+    ensureDatasetSchemaRowsReady()
+    parseDatasetContentToRows(datasetForm.dataContent)
+  } catch (error) {
+    ElMessage.warning(error.message || '请先维护Schema字段')
+    return
+  }
   showCreateDatasetDialog.value = true
 }
 
@@ -975,6 +1205,7 @@ const resetDatasetForm = () => {
   datasetForm.name = ''
   datasetForm.description = ''
   datasetForm.dataContent = ''
+  datasetParamRows.value = []
 }
 
 // 加载Prompt片段
@@ -982,7 +1213,7 @@ const loadPromptFragments = async () => {
   if (!selectedPromptPsuId.value) return
   
   try {
-    const response = await api.get(`/prompts/${selectedPromptPsuId.value}`)
+    const response = await api.get('/prompts/by-psuId', { params: { psuId: selectedPromptPsuId.value } })
     promptFragments.value = response.data
   } catch (error) {
     console.error('加载Prompt片段失败:', error)
@@ -1004,10 +1235,10 @@ const savePromptFragment = async () => {
     return
   }
   try {
-    await api.put(`/prompts/${editingPromptFragment.value.id}`, {
+    await api.post('/prompts/by-fragmentId', {
       baseVersionNo: psu.versionNo,
       content: editingPromptFragment.value.content
-    })
+    }, { params: { fragmentId: editingPromptFragment.value.id } })
     ElMessage.success('Prompt片段保存成功')
     showEditPromptDialog.value = false
     await loadPsus()
@@ -1252,6 +1483,8 @@ const handleVersionReviewPageChange = (page) => {
 }
 
 onMounted(() => {
+  schemaParamRows.value = [createEmptySchemaParamRow()]
+  datasetParamRows.value = []
   syncMenuFromRoute()
   loadPsus()
   loadVersionReviews()
@@ -1392,6 +1625,53 @@ watch(
 
 .section-header h3 {
   margin: 0;
+}
+
+.dataset-param-editor {
+  width: 100%;
+  border: 1px solid #dcdfe6;
+  border-radius: 6px;
+  background: #fff;
+  padding: 10px;
+}
+
+.dataset-param-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #606266;
+  margin-bottom: 8px;
+}
+
+.dataset-param-name {
+  font-weight: 600;
+  color: #303133;
+}
+
+.dataset-param-desc {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.4;
+}
+
+.schema-param-editor {
+  width: 100%;
+  border: 1px solid #dcdfe6;
+  border-radius: 6px;
+  background: #fff;
+  padding: 10px;
+}
+
+.schema-param-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: #606266;
+  margin-bottom: 8px;
 }
 
 h2, h3 {

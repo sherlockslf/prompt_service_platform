@@ -15,7 +15,9 @@ import java.util.List;
 public class PromptTestResponse {
     private String renderedPrompt;
     private List<String> missingVars;
+    private String modelOutput;
+    private String provider;
+    private String model;
     private Integer latencyMs;
     private String traceId;
 }
-

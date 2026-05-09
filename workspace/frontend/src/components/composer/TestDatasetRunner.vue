@@ -45,8 +45,8 @@
           <el-table-column prop="name" label="用例名称" width="150" />
         <el-table-column label="状态" width="80" align="center">
           <template #default="{ row }">
-            <el-tag :type="row.success ? 'success' : 'danger'" size="small">
-              {{ row.success ? '成功' : '失败' }}
+            <el-tag :type="row.success ? 'success' : resolveFailureTagType(row)" size="small">
+              {{ row.success ? '成功' : resolveFailureLabel(row) }}
             </el-tag>
           </template>
         </el-table-column>
@@ -82,7 +82,13 @@
             {{ row.successCases }}/{{ row.totalCases }} 成功
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态" width="130" />
+        <el-table-column label="状态" width="130">
+          <template #default="{ row }">
+            <el-tag :type="resolveRunStatusTagType(row)" size="small">
+              {{ row.status || '-' }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="异常原因" min-width="160">
           <template #default="{ row }">
             <span v-if="row.exceptionReason" class="error-text">{{ row.exceptionReason }}</span>
@@ -270,6 +276,40 @@ function resolveMergedStatus(totalCases, failedCases) {
   if (!failedCases || failedCases <= 0) return 'SUCCESS'
   if (failedCases >= totalCases) return 'FAILED'
   return 'PARTIAL_SUCCESS'
+}
+
+function resolveFailureLabel(row) {
+  const msg = String(row?.exceptionReason || row?.error || '')
+  if (msg.includes('Schema') || msg.includes('schema') || msg.includes('必填字段') || msg.includes('类型不匹配') || msg.includes('字段不在Schema中')) {
+    return 'Schema失败'
+  }
+  if (msg.includes('缺失变量')) {
+    return '变量缺失'
+  }
+  if (msg.includes('大模型调用') || msg.includes('HTTP')) {
+    return '模型失败'
+  }
+  return '失败'
+}
+
+function resolveFailureTagType(row) {
+  const label = resolveFailureLabel(row)
+  if (label === 'Schema失败') return 'warning'
+  if (label === '变量缺失') return 'info'
+  return 'danger'
+}
+
+function resolveRunStatusTagType(row) {
+  if (row?.status === 'SUCCESS') return 'success'
+  if (row?.status === 'PARTIAL_SUCCESS') return 'warning'
+  if (row?.status === 'FAILED') {
+    const msg = String(row?.exceptionReason || '')
+    if (msg.includes('Schema') || msg.includes('必填字段') || msg.includes('类型不匹配') || msg.includes('字段不在Schema中')) {
+      return 'warning'
+    }
+    return 'danger'
+  }
+  return 'info'
 }
 </script>
 

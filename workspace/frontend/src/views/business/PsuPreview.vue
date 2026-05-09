@@ -57,7 +57,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { psuApi, promptApi, schemaApi, testDatasetApi } from '@/services/api'
+import { psuApi, schemaApi, testDatasetApi, compositionApi } from '@/services/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -66,7 +66,7 @@ const psuInfo = ref({})
 const promptContent = ref('')
 const schemaContent = ref('{}')
 const datasets = ref([])
-const psuId = computed(() => Number(route.params.psuId))
+const psuId = computed(() => Number(route.query.psuId))
 
 const loadData = async () => {
   if (!Number.isInteger(psuId.value) || psuId.value <= 0) {
@@ -76,19 +76,31 @@ const loadData = async () => {
   }
   loading.value = true
   try {
-    const [psuRes, promptRes, schemaRes, datasetRes] = await Promise.all([
+    const [psuRes, compositionRes, schemaRes, datasetRes] = await Promise.allSettled([
       psuApi.getPsuById(psuId.value),
-      promptApi.getPromptFragments(psuId.value),
+      compositionApi.getComposition(psuId.value),
       schemaApi.getSchema(psuId.value),
       testDatasetApi.getTestDatasets(psuId.value)
     ])
 
-    psuInfo.value = psuRes.data || {}
-    const fragments = Array.isArray(promptRes.data) ? promptRes.data : []
-    const coreRules = fragments.find(item => item.fragmentKey === 'core_rules')
-    promptContent.value = coreRules?.content || fragments.map(item => item.content).filter(Boolean).join('\n\n') || ''
-    schemaContent.value = formatJson(schemaRes.data?.schemaContent || '{}')
-    datasets.value = Array.isArray(datasetRes.data) ? datasetRes.data : []
+    if (psuRes.status !== 'fulfilled') {
+      throw psuRes.reason
+    }
+    psuInfo.value = psuRes.value.data || {}
+
+    // 规则统一：预览仅展示编排草稿内容；未保存草稿时保持空字符串。
+    if (compositionRes.status === 'fulfilled') {
+      promptContent.value = compositionRes.value?.data?.content || ''
+    } else {
+      promptContent.value = ''
+    }
+
+    schemaContent.value = schemaRes.status === 'fulfilled'
+      ? formatJson(schemaRes.value.data?.schemaContent || '{}')
+      : '{}'
+    datasets.value = datasetRes.status === 'fulfilled'
+      ? (Array.isArray(datasetRes.value.data) ? datasetRes.value.data : [])
+      : []
   } catch (error) {
     console.error('加载PSU预览失败:', error)
     ElMessage.error('加载PSU预览失败')
@@ -102,7 +114,7 @@ const goBack = () => {
 }
 
 const goPromptEdit = () => {
-  router.push(`/business/psus/${psuId.value}/composer`)
+  router.push({ path: '/business/psus/composer', query: { psuId: String(psuId.value) } })
 }
 
 const goSchemaEdit = () => {

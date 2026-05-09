@@ -2,13 +2,23 @@ package com.example.psu.service;
 
 import com.example.psu.dto.PsuCreateRequest;
 import com.example.psu.dto.response.PsuResponse;
+import com.example.psu.dto.response.PsuVersionResponse;
+import com.example.psu.entity.JsonSchema;
+import com.example.psu.entity.PromptComposition;
+import com.example.psu.entity.PromptCompositionRevision;
+import com.example.psu.entity.PsuVersion;
 import com.example.psu.entity.PsuUnit;
 import com.example.psu.enums.PsuStatus;
 import com.example.psu.exception.BusinessException;
 import com.example.psu.exception.ErrorCode;
 import com.example.psu.exception.RequestValidationUtils;
+import com.example.psu.repository.JsonSchemaRepository;
+import com.example.psu.repository.PromptCompositionRepository;
+import com.example.psu.repository.PromptCompositionRevisionRepository;
 import com.example.psu.repository.PsuRepository;
+import com.example.psu.repository.PsuVersionRepository;
 import com.example.psu.repository.UserRepository;
+import com.example.psu.repository.VersionReviewRepository;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -19,6 +29,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.util.Objects;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * PSU管理服务
@@ -31,6 +43,21 @@ public class PsuService {
     
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private PsuVersionRepository psuVersionRepository;
+
+    @Autowired
+    private JsonSchemaRepository jsonSchemaRepository;
+
+    @Autowired
+    private PromptCompositionRepository promptCompositionRepository;
+
+    @Autowired
+    private PromptCompositionRevisionRepository promptCompositionRevisionRepository;
+
+    @Autowired
+    private VersionReviewRepository versionReviewRepository;
     
     /**
      * 创建PSU（仅研发可操作）
@@ -56,7 +83,9 @@ public class PsuService {
         psu.setCreatorId(creatorId);
         psu.setVersionNo(1);
         
-        return psuRepository.save(psu);
+        PsuUnit saved = psuRepository.save(psu);
+        recordVersionSnapshot(saved, creatorId, "CREATE_PSU");
+        return saved;
     }
     
     /**
@@ -97,7 +126,9 @@ public class PsuService {
         psu.setName(request.getName());
         psu.setDescription(request.getDescription());
         
-        return psuRepository.save(psu);
+        PsuUnit saved = psuRepository.save(psu);
+        recordVersionSnapshot(saved, 0L, "UPDATE_PSU_INFO");
+        return saved;
     }
     
     /**
@@ -122,7 +153,7 @@ public class PsuService {
         return psuRepository.findByPsuId(psuId)
             .orElseThrow(() -> new BusinessException(ErrorCode.PSU_NOT_FOUND, "PSU不存在，PSU ID: " + psuId));
     }
-    
+
     /**
      * 删除PSU（归档）
      * @param id PSU数据库ID
@@ -139,6 +170,35 @@ public class PsuService {
         }
         psu.setStatus(PsuStatus.ARCHIVED);
         psuRepository.save(psu);
+    }
+
+    public PsuUnit bumpVersionAndSnapshot(Long psuRefId, Long operatorId, String changeSource) {
+        RequestValidationUtils.requireNonNull(psuRefId, "psuRefId");
+        PsuUnit psu = psuRepository.findById(psuRefId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.PSU_NOT_FOUND, "PSU不存在，ID: " + psuRefId));
+        psu.setVersionNo((psu.getVersionNo() == null ? 0 : psu.getVersionNo()) + 1);
+        PsuUnit saved = psuRepository.save(psu);
+        recordVersionSnapshot(saved, operatorId, changeSource);
+        return saved;
+    }
+
+    public List<PsuVersionResponse> getPsuVersionHistory(String psuId) {
+        RequestValidationUtils.requireNonBlank(psuId, "psuId");
+        return psuVersionRepository.findByPsuIdOrderByVersionNoDesc(psuId).stream()
+            .map(this::toPsuVersionResponse)
+            .collect(Collectors.toList());
+    }
+
+    public List<PsuVersionResponse> getSubmittablePsuVersions(String psuId) {
+        RequestValidationUtils.requireNonBlank(psuId, "psuId");
+        PsuUnit psu = psuRepository.findByPsuId(psuId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.PSU_NOT_FOUND, "PSU不存在，PSU ID: " + psuId));
+        Long psuRefId = psu.getId();
+        return psuVersionRepository.findByPsuIdOrderByVersionNoDesc(psuId).stream()
+            .filter(this::isVersionSubmittable)
+            .filter(v -> versionReviewRepository.findByPsuIdAndVersionNo(psuRefId, v.getVersionNo()).isEmpty())
+            .map(this::toPsuVersionResponse)
+            .collect(Collectors.toList());
     }
     
     /**
@@ -161,6 +221,59 @@ public class PsuService {
         });
         
         return response;
+    }
+
+    private void recordVersionSnapshot(PsuUnit psu, Long operatorId, String changeSource) {
+        if (psu == null || psu.getPsuId() == null || psu.getVersionNo() == null) {
+            return;
+        }
+        if (psuVersionRepository.findByPsuIdAndVersionNo(psu.getPsuId(), psu.getVersionNo()).isPresent()) {
+            return;
+        }
+        PsuVersion version = new PsuVersion();
+        version.setPsuRefId(psu.getId());
+        version.setPsuId(psu.getPsuId());
+        version.setVersionNo(psu.getVersionNo());
+        version.setName(psu.getName());
+        version.setDescription(psu.getDescription());
+        version.setStatus(psu.getStatus());
+        version.setOperatorId(operatorId == null ? 0L : operatorId);
+        version.setChangeSource(changeSource == null || changeSource.isBlank() ? "UNKNOWN" : changeSource);
+        jsonSchemaRepository.findTopByPsuIdOrderByVersionDesc(psu.getId()).ifPresent(schema -> {
+            version.setSchemaVersionNo(schema.getVersion());
+        });
+        promptCompositionRepository.findByPsuId(psu.getId()).ifPresent(composition -> {
+            version.setCompositionId(composition.getId());
+            promptCompositionRevisionRepository.findTopByCompositionIdOrderByRevisionNoDesc(composition.getId())
+                .ifPresent(revision -> version.setCompositionRevisionNo(revision.getRevisionNo()));
+        });
+        psuVersionRepository.save(version);
+    }
+
+    private PsuVersionResponse toPsuVersionResponse(PsuVersion v) {
+        PsuVersionResponse response = new PsuVersionResponse();
+        response.setId(v.getId());
+        response.setPsuRefId(v.getPsuRefId());
+        response.setPsuId(v.getPsuId());
+        response.setVersionNo(v.getVersionNo());
+        response.setName(v.getName());
+        response.setDescription(v.getDescription());
+        response.setStatus(v.getStatus() == null ? null : v.getStatus().getCode());
+        response.setOperatorId(v.getOperatorId());
+        response.setChangeSource(v.getChangeSource());
+        response.setSchemaVersionNo(v.getSchemaVersionNo());
+        response.setCompositionId(v.getCompositionId());
+        response.setCompositionRevisionNo(v.getCompositionRevisionNo());
+        response.setCreatedAt(v.getCreatedAt());
+        return response;
+    }
+
+    private boolean isVersionSubmittable(PsuVersion v) {
+        if (v == null) return false;
+        if (v.getStatus() == PsuStatus.FORMAL) return false;
+        if (v.getSchemaVersionNo() == null) return false;
+        if (v.getCompositionId() == null || v.getCompositionRevisionNo() == null) return false;
+        return true;
     }
 }
 

@@ -35,6 +35,12 @@ public class PromptService {
     
     @Autowired
     private PsuRepository psuRepository;
+
+    @Autowired
+    private PsuService psuService;
+
+    @Autowired
+    private LlmChatService llmChatService;
     
     /**
      * 获取Prompt片段
@@ -196,14 +202,36 @@ public class PromptService {
         RequestValidationUtils.requireNonNull(psuId, "psuId");
         RequestValidationUtils.requireNonNull(inputParams, "inputParams");
         long begin = System.currentTimeMillis();
-        // 获取所有Prompt片段
-        List<PromptFragment> fragments = getPromptFragments(psuId);
+        String manualRenderedPrompt = inputParams.get("renderedPrompt") instanceof String
+            ? ((String) inputParams.get("renderedPrompt")).trim()
+            : "";
 
-        // 组装完整Prompt并收集缺失变量，统一返回结构化数据
-        RenderResult renderResult = assembleFullPromptWithMissingVars(fragments, inputParams);
+        String promptForModel;
+        List<String> missingVars;
+        String renderedPromptForResponse;
+        if (!manualRenderedPrompt.isEmpty()) {
+            // 若前端已给出渲染预览文本，则直接以该文本发起模型调用，确保前后完全一致。
+            promptForModel = manualRenderedPrompt;
+            renderedPromptForResponse = manualRenderedPrompt;
+            missingVars = List.of();
+        } else {
+            // 回退逻辑：基于当前Prompt片段和输入参数在后端渲染。
+            List<PromptFragment> fragments = getPromptFragments(psuId);
+            RenderResult renderResult = assembleFullPromptWithMissingVars(fragments, inputParams);
+            promptForModel = renderResult.renderedPrompt();
+            renderedPromptForResponse = renderResult.renderedPrompt();
+            missingVars = renderResult.missingVars().stream().toList();
+            if (!renderResult.missingVars().isEmpty()) {
+                throw new RuntimeException("存在缺失变量，无法发起模型调用: " + String.join(", ", renderResult.missingVars()));
+            }
+        }
+
         PromptTestResponse response = new PromptTestResponse();
-        response.setRenderedPrompt(renderResult.renderedPrompt());
-        response.setMissingVars(renderResult.missingVars().stream().toList());
+        response.setRenderedPrompt(renderedPromptForResponse);
+        response.setMissingVars(missingVars);
+        response.setProvider(llmChatService.getProvider());
+        response.setModel(llmChatService.getModel());
+        response.setModelOutput(llmChatService.chatOnce(promptForModel));
         response.setLatencyMs((int) (System.currentTimeMillis() - begin));
         response.setTraceId(UUID.randomUUID().toString());
         return response;
@@ -242,8 +270,7 @@ public class PromptService {
     }
 
     private void bumpPromptVersion(PsuUnit psu) {
-        psu.setVersionNo((psu.getVersionNo() == null ? 0 : psu.getVersionNo()) + 1);
-        psuRepository.save(psu);
+        psuService.bumpVersionAndSnapshot(psu.getId(), 0L, "UPDATE_PROMPT");
     }
 
     private RenderResult assembleFullPromptWithMissingVars(List<PromptFragment> fragments, Map<String, Object> variables) {

@@ -369,7 +369,11 @@ public class ReleaseService {
             .findByCompositionIdAndRevisionNo(releaseVersion.getPromptId(), releaseVersion.getPromptVersionNo())
             .orElseThrow(() -> new IllegalArgumentException("未找到Prompt版本快照"));
 
-        JsonSchema schema = jsonSchemaRepository.findById(releaseVersion.getJsonSchemaId())
+        Long jsonSchemaId = releaseVersion.getJsonSchemaId();
+        if (jsonSchemaId == null) {
+            throw new IllegalArgumentException("发布版本的jsonSchemaId为空");
+        }
+        JsonSchema schema = jsonSchemaRepository.findById(jsonSchemaId)
             .orElseThrow(() -> new IllegalArgumentException("未找到Schema版本"));
 
         PromptSchemaResolveResponse response = new PromptSchemaResolveResponse();

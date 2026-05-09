@@ -43,8 +43,8 @@ import { ElMessage } from 'element-plus'
 
 const route = useRoute()
 const router = useRouter()
-const psuId = computed(() => Number(route.params.psuId))
-const reviewId = computed(() => Number(route.params.reviewId))
+const psuId = computed(() => Number(route.query.psuId))
+const reviewId = computed(() => Number(route.query.reviewId))
 
 const loading = ref(false)
 const previewing = ref(false)

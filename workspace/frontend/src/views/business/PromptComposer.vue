@@ -212,7 +212,7 @@ import TestDatasetRunner from '@/components/composer/TestDatasetRunner.vue'
 const route = useRoute()
 const router = useRouter()
 const psuId = computed(() => {
-  const id = Number(route.params.psuId)
+  const id = Number(route.query.psuId)
   return Number.isInteger(id) && id > 0 ? id : null
 })
 const selectedPsuId = ref(psuId.value)
@@ -293,13 +293,13 @@ watch(selectedPsuId, async (newId, oldId) => {
   if (newId === oldId) return
   if (!newId) {
     resetComposerState()
-    if (route.params.psuId) {
+    if (route.query.psuId) {
       router.replace('/business/composer')
     }
     return
   }
-  if (Number(route.params.psuId) !== Number(newId)) {
-    router.replace(`/business/psus/${newId}/composer`)
+  if (Number(route.query.psuId) !== Number(newId)) {
+    router.replace({ path: '/business/psus/composer', query: { psuId: String(newId) } })
   }
   await initializeBySelectedPsu()
 })
@@ -786,6 +786,10 @@ function cloneObject(value) {
 }
 
 async function runModelChatTest() {
+  await runModelChatTestWithRetry(false)
+}
+
+async function runModelChatTestWithRetry(fromRetry) {
   // 统一走后端Prompt测试接口，避免前端出现多套测试路径
   if (!selectedPsuId.value) {
     ElMessage.warning('请先选择PSU')
@@ -793,29 +797,66 @@ async function runModelChatTest() {
   }
   testingModel.value = true
   modelTestError.value = ''
+  modelTestOutput.value = ''
+  let tipTimer10 = null
+  let tipTimer20 = null
+  let abortTimer30 = null
+  let forceAbortedByTimeout = false
+  const controller = new AbortController()
   try {
+    if (fromRetry) {
+      ElMessage.info('已重试请求，请稍候')
+    }
+    tipTimer10 = setTimeout(() => {
+      ElMessage.info('大模型响应中，请稍候...')
+    }, 10000)
+    tipTimer20 = setTimeout(() => {
+      ElMessage.warning('请求排队中，请继续等待...')
+    }, 20000)
+    abortTimer30 = setTimeout(() => {
+      forceAbortedByTimeout = true
+      controller.abort()
+    }, 30000)
+
     // 测试输入优先使用参数集，并用测试数据集做覆盖
     let input = cloneObject(paramSetInput.value)
     if (Object.keys(selectedDatasetInput.value || {}).length > 0) {
       input = { ...input, ...cloneObject(selectedDatasetInput.value) }
     }
-    const response = await promptApi.testPrompt(selectedPsuId.value, input)
+    // 使用当前页面“渲染预览”里的文本作为最终模型输入，保证结果与预览一致。
+    input.renderedPrompt = renderedPrompt.value || ''
+    const response = await promptApi.testPrompt(selectedPsuId.value, input, {
+      timeout: 30000,
+      signal: controller.signal
+    })
     const data = response.data || {}
-    const resultText = {
-      renderedPrompt: data.renderedPrompt || '',
-      missingVars: Array.isArray(data.missingVars) ? data.missingVars : [],
-      latencyMs: data.latencyMs ?? null,
-      traceId: data.traceId || ''
-    }
-    modelTestOutput.value = JSON.stringify(resultText, null, 2)
-    if (Array.isArray(resultText.missingVars) && resultText.missingVars.length > 0) {
-      modelTestError.value = `缺失变量: ${resultText.missingVars.join(', ')}`
+    modelTestOutput.value = data.modelOutput || ''
+    if (Array.isArray(data.missingVars) && data.missingVars.length > 0) {
+      modelTestError.value = `缺失变量: ${data.missingVars.join(', ')}`
     }
     ElMessage.success('接口测试完成')
   } catch (e) {
-    modelTestError.value = e.response?.data?.message || e.message || '接口测试失败'
-    ElMessage.error(modelTestError.value)
+    if (forceAbortedByTimeout || e.code === 'ECONNABORTED' || e.code === 'ERR_CANCELED') {
+      modelTestError.value = '请求超时（30秒），本次测试已终止'
+      ElMessage.error(modelTestError.value)
+      try {
+        await ElMessageBox.confirm('请求已超时并终止，是否重试？', '请求超时', {
+          confirmButtonText: '重试',
+          cancelButtonText: '取消',
+          type: 'warning'
+        })
+        await runModelChatTestWithRetry(true)
+      } catch {
+        // 用户取消重试，不做额外处理
+      }
+    } else {
+      modelTestError.value = e.response?.data?.message || e.message || '接口测试失败'
+      ElMessage.error(modelTestError.value)
+    }
   } finally {
+    if (tipTimer10) clearTimeout(tipTimer10)
+    if (tipTimer20) clearTimeout(tipTimer20)
+    if (abortTimer30) clearTimeout(abortTimer30)
     testingModel.value = false
   }
 }

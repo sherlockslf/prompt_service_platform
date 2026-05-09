@@ -3,10 +3,12 @@ package com.example.psu.service.impl;
 import com.example.psu.dto.request.ReviewRequest;
 import com.example.psu.dto.request.RollbackVersionRequest;
 import com.example.psu.dto.response.VersionCompareResponse;
+import com.example.psu.dto.response.VersionReviewSnapshotResponse;
 import com.example.psu.entity.JsonSchema;
 import com.example.psu.entity.PromptComposition;
 import com.example.psu.entity.PromptCompositionRevision;
 import com.example.psu.entity.PsuReleaseVersion;
+import com.example.psu.entity.PsuVersion;
 import com.example.psu.entity.PsuUnit;
 import com.example.psu.entity.VersionReview;
 import com.example.psu.enums.CompositionStatus;
@@ -21,6 +23,7 @@ import com.example.psu.repository.PromptCompositionRepository;
 import com.example.psu.repository.PromptCompositionRevisionRepository;
 import com.example.psu.repository.PsuReleaseVersionRepository;
 import com.example.psu.repository.PsuRepository;
+import com.example.psu.repository.PsuVersionRepository;
 import com.example.psu.repository.VersionReviewRepository;
 import com.example.psu.service.CodeGeneratorService;
 import com.example.psu.service.CompositionService;
@@ -49,6 +52,7 @@ public class VersionReviewServiceImpl implements VersionReviewService {
 
     private final VersionReviewRepository versionReviewRepository;
     private final PsuRepository psuRepository;
+    private final PsuVersionRepository psuVersionRepository;
     private final PromptCompositionRepository promptCompositionRepository;
     private final PromptCompositionRevisionRepository promptCompositionRevisionRepository;
     private final JsonSchemaRepository jsonSchemaRepository;
@@ -59,6 +63,7 @@ public class VersionReviewServiceImpl implements VersionReviewService {
     public VersionReviewServiceImpl(
         VersionReviewRepository versionReviewRepository,
         PsuRepository psuRepository,
+        PsuVersionRepository psuVersionRepository,
         PromptCompositionRepository promptCompositionRepository,
         PromptCompositionRevisionRepository promptCompositionRevisionRepository,
         JsonSchemaRepository jsonSchemaRepository,
@@ -68,6 +73,7 @@ public class VersionReviewServiceImpl implements VersionReviewService {
     ) {
         this.versionReviewRepository = versionReviewRepository;
         this.psuRepository = psuRepository;
+        this.psuVersionRepository = psuVersionRepository;
         this.promptCompositionRepository = promptCompositionRepository;
         this.promptCompositionRevisionRepository = promptCompositionRevisionRepository;
         this.jsonSchemaRepository = jsonSchemaRepository;
@@ -93,36 +99,45 @@ public class VersionReviewServiceImpl implements VersionReviewService {
 
     @Override
     public VersionReview submitVersion(Long psuId, Long submitterId) {
+        PsuUnit psu = psuRepository.findById(psuId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.PSU_NOT_FOUND, "PSU不存在: " + psuId));
+        return submitVersion(psuId, psu.getVersionNo(), submitterId);
+    }
+
+    @Override
+    public VersionReview submitVersion(Long psuId, Integer versionNo, Long submitterId) {
         RequestValidationUtils.requireNonNull(psuId, "psuId");
+        RequestValidationUtils.requireNonNull(versionNo, "versionNo");
         RequestValidationUtils.requireNonNull(submitterId, "submitterId");
         PsuUnit psu = psuRepository.findById(psuId)
             .orElseThrow(() -> new BusinessException(ErrorCode.PSU_NOT_FOUND, "PSU不存在: " + psuId));
         if (psu.getStatus() == PsuStatus.ARCHIVED) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "已删除PSU不允许提交审核");
         }
-        if (versionReviewRepository.findByPsuIdAndVersionNo(psuId, psu.getVersionNo()).isPresent()) {
+        if (versionReviewRepository.findByPsuIdAndVersionNo(psuId, versionNo).isPresent()) {
             throw new BusinessException(ErrorCode.VERSION_ALREADY_SUBMITTED, "当前PSU版本已提交审核");
         }
-
-        // 获取编排，如果状态不是CANDIDATE则提交审核使其变为CANDIDATE
-        PromptComposition composition = compositionService.getCompositionByPsuId(psuId)
-            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "编排不存在"));
-        if (composition.getStatus() != CompositionStatus.CANDIDATE) {
-            composition = compositionService.submit(psuId, submitterId);
+        PsuVersion psuVersion = psuVersionRepository.findByPsuIdAndVersionNo(psu.getPsuId(), versionNo)
+            .orElseThrow(() -> new BusinessException(ErrorCode.VERSION_NOT_FOUND, "PSU历史版本不存在: v" + versionNo));
+        if (psuVersion.getStatus() == PsuStatus.FORMAL) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "正式版不允许重复提交审核");
         }
-
-        PromptCompositionRevision revision = compositionService.getLatestRevision(composition.getId()).orElse(null);
-        if (revision == null) {
-            revision = compositionService.createRevisionSnapshot(composition, submitterId);
+        Long compositionId = psuVersion.getCompositionId();
+        Integer compositionRevisionNo = psuVersion.getCompositionRevisionNo();
+        if (compositionId == null || compositionRevisionNo == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "该历史版本缺少Prompt快照，暂不支持提交审核");
         }
+        promptCompositionRevisionRepository.findByCompositionIdAndRevisionNo(compositionId, compositionRevisionNo)
+            .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "历史版本对应的Prompt快照不存在"));
 
         VersionReview review = new VersionReview();
         review.setPsuId(psuId);
         review.setSubmitterId(submitterId);
         review.setStatus(ReviewStatus.CANDIDATE);
-        review.setVersionNo(psu.getVersionNo());
-        review.setCompositionId(composition.getId());
-        review.setCompositionRevisionNo(revision.getRevisionNo());
+        review.setVersionNo(versionNo);
+        review.setSchemaVersionNo(psuVersion.getSchemaVersionNo());
+        review.setCompositionId(compositionId);
+        review.setCompositionRevisionNo(compositionRevisionNo);
         review.setSubmittedAt(LocalDateTime.now());
 
         VersionReview saved = versionReviewRepository.save(review);
@@ -293,6 +308,31 @@ public class VersionReviewServiceImpl implements VersionReviewService {
         return versionReviewRepository.save(review);
     }
 
+    @Override
+    public VersionReviewSnapshotResponse getReviewSnapshot(Long reviewId) {
+        RequestValidationUtils.requireNonNull(reviewId, "reviewId");
+        VersionReview review = versionReviewRepository.findById(reviewId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.VERSION_NOT_FOUND, "审核记录不存在"));
+        if (review.getCompositionId() == null || review.getCompositionRevisionNo() == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "审核快照不存在");
+        }
+        PromptCompositionRevision revision = promptCompositionRevisionRepository
+            .findByCompositionIdAndRevisionNo(review.getCompositionId(), review.getCompositionRevisionNo())
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "编排快照不存在"));
+
+        VersionReviewSnapshotResponse response = new VersionReviewSnapshotResponse();
+        response.setReviewId(review.getId());
+        response.setPsuId(review.getPsuId());
+        response.setVersionNo(review.getVersionNo());
+        response.setSchemaVersionNo(review.getSchemaVersionNo());
+        response.setCompositionId(review.getCompositionId());
+        response.setCompositionRevisionNo(review.getCompositionRevisionNo());
+        response.setSchemaVersionAtTime(revision.getSchemaVersionAtTime());
+        response.setSpecJsonSnapshot(revision.getSpecJsonSnapshot());
+        response.setPromptContentSnapshot(revision.getContentSnapshot());
+        return response;
+    }
+
     private void archiveOlderFormalReviews(VersionReview currentFormal) {
         List<VersionReview> all = versionReviewRepository.findByPsuIdOrderBySubmittedAtDesc(currentFormal.getPsuId());
         for (VersionReview item : all) {
@@ -320,8 +360,7 @@ public class VersionReviewServiceImpl implements VersionReviewService {
             record.setPsuId(review.getPsuId());
             record.setPsuVersionNo(review.getVersionNo());
 
-            JsonSchema schema = jsonSchemaRepository.findTopByPsuIdOrderByVersionDesc(review.getPsuId())
-                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "Schema不存在，无法生成发布记录"));
+            JsonSchema schema = resolveSchemaForVersion(review);
             record.setJsonSchemaId(schema.getId());
             record.setJsonSchemaVersionNo(schema.getVersion() == null ? 1 : schema.getVersion());
 
@@ -337,6 +376,26 @@ public class VersionReviewServiceImpl implements VersionReviewService {
             clearFormalTagInReleaseRecord(review.getPsuId(), record.getId());
         }
         psuReleaseVersionRepository.save(record);
+    }
+
+    private JsonSchema resolveSchemaForVersion(VersionReview review) {
+        if (review.getSchemaVersionNo() != null) {
+            Optional<JsonSchema> direct = jsonSchemaRepository.findByPsuIdAndVersion(review.getPsuId(), review.getSchemaVersionNo());
+            if (direct.isPresent()) {
+                return direct.get();
+            }
+        }
+        PsuUnit psu = psuRepository.findById(review.getPsuId())
+            .orElseThrow(() -> new BusinessException(ErrorCode.PSU_NOT_FOUND, "PSU不存在"));
+        Optional<PsuVersion> psuVersionOpt = psuVersionRepository.findByPsuIdAndVersionNo(psu.getPsuId(), review.getVersionNo());
+        if (psuVersionOpt.isPresent() && psuVersionOpt.get().getSchemaVersionNo() != null) {
+            Optional<JsonSchema> byPsuVersion = jsonSchemaRepository.findByPsuIdAndVersion(review.getPsuId(), psuVersionOpt.get().getSchemaVersionNo());
+            if (byPsuVersion.isPresent()) {
+                return byPsuVersion.get();
+            }
+        }
+        return jsonSchemaRepository.findTopByPsuIdOrderByVersionDesc(review.getPsuId())
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "Schema不存在，无法生成发布记录"));
     }
 
     private void clearFormalTagInReleaseRecord(Long psuId, Long exceptId) {

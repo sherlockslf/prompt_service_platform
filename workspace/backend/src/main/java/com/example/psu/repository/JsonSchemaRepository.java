@@ -12,8 +12,8 @@ import java.util.Optional;
  */
 @Repository
 public interface JsonSchemaRepository extends JpaRepository<JsonSchema, Long> {
-    Optional<JsonSchema> findByPsuId(Long psuId);
-    
+    Optional<JsonSchema> findByPsuIdAndVersion(Long psuId, Integer version);
+
     /**
      * 根据PSU ID查找最新的Schema
      * @param psuId PSU ID

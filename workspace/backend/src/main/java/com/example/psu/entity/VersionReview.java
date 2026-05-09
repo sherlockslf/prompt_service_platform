@@ -71,6 +71,8 @@ public class VersionReview {
     @Column(columnDefinition = "LONGTEXT")
     private String codeContent;
 
+    private Integer schemaVersionNo;
+
     private Long compositionId;
 
     private Integer compositionRevisionNo;

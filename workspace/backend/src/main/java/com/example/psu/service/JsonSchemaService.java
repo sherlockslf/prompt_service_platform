@@ -33,6 +33,9 @@ public class JsonSchemaService {
     
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private PsuService psuService;
     
     /**
      * 获取Schema（研发可编辑，业务只读）
@@ -47,7 +50,7 @@ public class JsonSchemaService {
         psuRepository.findById(safePsuId)
                 .orElseThrow(() -> new RuntimeException("PSU not found: " + safePsuId));
 
-        return jsonSchemaRepository.findByPsuId(safePsuId)
+        return jsonSchemaRepository.findTopByPsuIdOrderByVersionDesc(safePsuId)
                 .orElseGet(() -> initializeEmptySchema(safePsuId, userId));
     }
     
@@ -78,25 +81,21 @@ public class JsonSchemaService {
             throw new RuntimeException("Invalid JSON Schema format");
         }
         
-        // 覆盖写语义：同一PSU只保留一条Schema记录，并持续递增schema版本号
-        JsonSchema schema = jsonSchemaRepository.findByPsuId(safePsuId).orElseGet(() -> {
-            JsonSchema created = new JsonSchema();
-            created.setPsuId(safePsuId);
-            created.setCreatedAt(LocalDateTime.now());
-            created.setVersion(0);
-            return created;
-        });
+        // 多版本语义：每次更新都新增一条Schema版本记录，保留历史可追溯。
+        int nextSchemaVersion = jsonSchemaRepository.findTopByPsuIdOrderByVersionDesc(safePsuId)
+            .map(JsonSchema::getVersion)
+            .orElse(0) + 1;
+        JsonSchema schema = new JsonSchema();
+        schema.setPsuId(safePsuId);
         schema.setSchemaContent(schemaContent);
-        int nextSchemaVersion = (schema.getVersion() == null ? 0 : schema.getVersion()) + 1;
         schema.setVersion(nextSchemaVersion);
         schema.setModifiedBy(userId == null ? 0L : userId);
         schema.setChangeLog(changeLog);
 
         JsonSchema savedSchema = jsonSchemaRepository.save(schema);
         
-        // 编辑Schema：PSU版本号独立递增
-        psu.setVersionNo((psu.getVersionNo() == null ? 0 : psu.getVersionNo()) + 1);
-        psuRepository.save(psu);
+        // 编辑Schema：PSU版本号独立递增，并记录PSU历史快照。
+        psuService.bumpVersionAndSnapshot(safePsuId, userId, "UPDATE_SCHEMA");
         
         return savedSchema;
     }
@@ -112,7 +111,7 @@ public class JsonSchemaService {
         // 先校验PSU存在，避免前端误传时返回空列表造成误判。
         psuRepository.findById(safePsuId)
                 .orElseThrow(() -> new RuntimeException("PSU not found: " + safePsuId));
-        // 兼容旧接口：覆盖写模式下仅返回当前一条
+        // 多版本模式：返回历史版本（新到旧）。
         return jsonSchemaRepository.findByPsuIdOrderByVersionDesc(safePsuId);
     }
 

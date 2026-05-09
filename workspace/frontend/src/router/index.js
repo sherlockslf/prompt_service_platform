@@ -47,17 +47,17 @@ const routes = [
     component: PromptComposer
   },
   {
-    path: '/business/psus/:psuId/composer',
+    path: '/business/psus/composer',
     name: 'PromptComposer',
     component: PromptComposer
   },
   {
-    path: '/business/psus/:psuId/preview',
+    path: '/business/psus/preview',
     name: 'PsuPreview',
     component: PsuPreview
   },
   {
-    path: '/developer/psus/:psuId/reviews/:reviewId',
+    path: '/developer/psus/reviews',
     name: 'CompositionReview',
     component: CompositionReview
   },

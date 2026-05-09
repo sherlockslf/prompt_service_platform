@@ -181,7 +181,7 @@ const editorRef = ref(null)
 // 获取PSU列表
 const loadPsuList = async () => {
   try {
-    const response = await api.get('/api/psus')
+    const response = await api.get('/psus')
     psuList.value = response.data.content || response.data
   } catch (error) {
     console.error('获取PSU列表失败:', error)
@@ -218,7 +218,7 @@ const loadPromptFragments = async () => {
 // 加载Schema信息
 const loadSchemaInfo = async () => {
   try {
-    const response = await api.get(`/api/schemas/${selectedPsuId.value}`)
+    const response = await api.get('/schemas/by-psuId', { params: { psuId: selectedPsuId.value } })
     schemaInfo.value = response.data
   } catch (error) {
     console.error('获取Schema信息失败:', error)

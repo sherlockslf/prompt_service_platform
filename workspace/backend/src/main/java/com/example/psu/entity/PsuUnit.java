@@ -14,7 +14,8 @@ import java.time.LocalDateTime;
            @Index(name = "idx_psu_units_psu_id", columnList = "psuId"),
            @Index(name = "idx_psu_units_status", columnList = "status"),
            @Index(name = "idx_psu_units_creator", columnList = "creatorId"),
-           @Index(name = "idx_psu_units_created", columnList = "createdAt")
+           @Index(name = "idx_psu_units_created", columnList = "createdAt"),
+           @Index(name = "idx_psu_units_updated", columnList = "updatedAt")
        },
        uniqueConstraints = {
            @UniqueConstraint(columnNames = "psuId")
