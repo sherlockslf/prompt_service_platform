@@ -1,0 +1,32 @@
+spring:
+  cloud:
+    nacos:
+      discovery:
+        server-addr: mse-3bb31300-nacos-ans.mse.aliyuncs.com:8848
+        namespace: prod
+        group: DEFAULT_GROUP
+      config:
+        server-addr: mse-3bb31300-nacos-ans.mse.aliyuncs.com:8848
+        namespace: prod
+        group: DEFAULT_GROUP
+        file-extension: yaml
+        refresh-enabled: true
+  config:
+    import:
+      - nacos:ai-psu.yaml
+      - optional:nacos:ai-psu-prod.yaml
+  threads:
+    virtual:
+      enabled: true
+
+app:
+  threading:
+    virtual:
+      enabled: true
+    blocking:
+      executor: virtual
+
+logging:
+  charset:
+    console: UTF-8
+    file: UTF-8

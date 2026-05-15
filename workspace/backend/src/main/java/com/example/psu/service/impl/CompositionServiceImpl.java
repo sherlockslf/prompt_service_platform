@@ -19,6 +19,8 @@ import com.example.psu.repository.PromptCompositionRepository;
 import com.example.psu.repository.PromptCompositionRevisionRepository;
 import com.example.psu.repository.PsuRepository;
 import com.example.psu.service.CompositionService;
+import com.example.psu.service.PsuService;
+import com.example.psu.service.engine.PromptRuleEngine;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -51,19 +53,25 @@ public class CompositionServiceImpl implements CompositionService {
     private final JsonSchemaRepository jsonSchemaRepository;
     private final PsuRepository psuRepository;
     private final ObjectMapper objectMapper;
+    private final PromptRuleEngine promptRuleEngine;
+    private final PsuService psuService;
 
     public CompositionServiceImpl(
         PromptCompositionRepository compositionRepository,
         PromptCompositionRevisionRepository revisionRepository,
         JsonSchemaRepository jsonSchemaRepository,
         PsuRepository psuRepository,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        PromptRuleEngine promptRuleEngine,
+        PsuService psuService
     ) {
         this.compositionRepository = compositionRepository;
         this.revisionRepository = revisionRepository;
         this.jsonSchemaRepository = jsonSchemaRepository;
         this.psuRepository = psuRepository;
         this.objectMapper = objectMapper;
+        this.promptRuleEngine = promptRuleEngine;
+        this.psuService = psuService;
     }
 
     @Override
@@ -177,30 +185,14 @@ public class CompositionServiceImpl implements CompositionService {
 
         Map<String, Object> input = request.getInput() == null ? new HashMap<>() : request.getInput();
         String template = composition.getContent() == null ? "" : composition.getContent();
-
-        Set<String> missing = new LinkedHashSet<>();
-        Set<String> used = new LinkedHashSet<>();
-        Matcher matcher = TOKEN_PATTERN.matcher(template);
-        StringBuffer rendered = new StringBuffer();
-        while (matcher.find()) {
-            String rawPath = matcher.group(1).trim();
-            used.add(rawPath);
-            Object value = getValueByPath(input, rawPath);
-            if (value == null) {
-                missing.add(rawPath);
-                matcher.appendReplacement(rendered, "");
-            } else if (value instanceof Map || value instanceof List) {
-                matcher.appendReplacement(rendered, Matcher.quoteReplacement(writeValueAsString(value)));
-            } else {
-                matcher.appendReplacement(rendered, Matcher.quoteReplacement(String.valueOf(value)));
-            }
-        }
-        matcher.appendTail(rendered);
+        List<Map<String, Object>> injectionPlan = resolveRenderInjectionPlan(composition, request);
+        PromptRuleEngine.RenderResult engineResult = promptRuleEngine.render(template, input, injectionPlan);
 
         CompositionRenderResponse response = new CompositionRenderResponse();
-        response.setRenderedPrompt(rendered.toString());
-        response.setMissingVars(new ArrayList<>(missing));
-        response.setUsedVars(new ArrayList<>(used));
+        response.setRenderedPrompt(engineResult.getRenderedPrompt());
+        response.setMissingVars(engineResult.getMissingVars());
+        response.setUsedVars(engineResult.getUsedVars());
+        response.setParamSetSnapshot(engineResult.getParamSnapshot());
         return response;
     }
 
@@ -226,6 +218,8 @@ public class CompositionServiceImpl implements CompositionService {
         composition.setUpdatedBy(userId);
         PromptComposition saved = compositionRepository.save(composition);
         createRevisionSnapshot(saved, userId);
+        // 提交编排后补一条PSU版本快照，确保后续版本提审能拿到最新composition快照指针。
+        psuService.bumpVersionAndSnapshot(psuId, userId, "SUBMIT_COMPOSITION");
         return saved;
     }
 
@@ -338,6 +332,22 @@ public class CompositionServiceImpl implements CompositionService {
             }
         }
         return result;
+    }
+
+    private List<Map<String, Object>> resolveRenderInjectionPlan(PromptComposition composition, CompositionRenderRequest request) {
+        if (request.getInjectionPlanOverride() != null && !request.getInjectionPlanOverride().isEmpty()) {
+            return request.getInjectionPlanOverride();
+        }
+        if (composition.getSpecJson() == null || composition.getSpecJson().isBlank()) {
+            return List.of();
+        }
+        try {
+            Map<String, Object> spec = objectMapper.readValue(composition.getSpecJson(), new TypeReference<Map<String, Object>>() {
+            });
+            return readListMap(spec.get("injectionPlan"));
+        } catch (Exception ignored) {
+            return List.of();
+        }
     }
 
     private JsonNode parseSchema(String schemaContent) {
@@ -458,48 +468,6 @@ public class CompositionServiceImpl implements CompositionService {
                 }
             }
             return true;
-        }
-    }
-
-    private Object getValueByPath(Map<String, Object> source, String rawPath) {
-        if (source == null || rawPath == null || rawPath.isBlank()) {
-            return null;
-        }
-        String normalized = rawPath.replaceAll("\\[(\\d+)\\]", ".$1");
-        String[] parts = normalized.split("\\.");
-        Object current = source;
-        for (String part : parts) {
-            if (part.isBlank()) {
-                continue;
-            }
-            if (current instanceof Map<?, ?> map) {
-                current = map.get(part);
-            } else if (current instanceof List<?> list) {
-                int idx;
-                try {
-                    idx = Integer.parseInt(part);
-                } catch (NumberFormatException e) {
-                    return null;
-                }
-                if (idx < 0 || idx >= list.size()) {
-                    return null;
-                }
-                current = list.get(idx);
-            } else {
-                return null;
-            }
-            if (current == null) {
-                return null;
-            }
-        }
-        return current;
-    }
-
-    private String writeValueAsString(Object value) {
-        try {
-            return objectMapper.writeValueAsString(value);
-        } catch (Exception e) {
-            return String.valueOf(value);
         }
     }
 

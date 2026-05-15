@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 从 backend/src/main/resources/application.yml 读取 MySQL 配置，
-自动创建数据库并执行 schema.sql 完成表结构与初始数据初始化。
+自动创建数据库并执行 schema.sql 完成表结构初始化。
 """
 
 from pathlib import Path
@@ -184,7 +184,7 @@ def create_database_if_not_exists(conf: dict) -> None:
 
 
 def init_schema(conf: dict) -> None:
-    # 连接目标库并执行 schema.sql 完成建表和初始化
+    # 连接目标库并执行 schema.sql 完成建表
     sql_file = schema_sql_path()
     if not sql_file.exists():
         raise FileNotFoundError(f"未找到 schema.sql: {sql_file}")

@@ -1,7 +1,15 @@
 import axios from 'axios'
 
 const LEGACY_API_PREFIX = '/api'
-const API_BASE_PREFIX = LEGACY_API_PREFIX
+const V1_API_PREFIX = '/api/v1'
+const API_BASE_PREFIX = (() => {
+  const envBaseUrl = import.meta.env.VITE_API_BASE_URL
+  if (envBaseUrl && String(envBaseUrl).trim()) {
+    return String(envBaseUrl).trim().replace(/\/+$/, '')
+  }
+  const useV1 = String(import.meta.env.VITE_API_USE_V1 || '').toLowerCase() === 'true'
+  return useV1 ? V1_API_PREFIX : LEGACY_API_PREFIX
+})()
 
 // 创建axios实例
 const api = axios.create({
@@ -125,7 +133,21 @@ export const versionApi = {
   // 审核版本
   reviewVersion: (reviewId, data) => api.post('/versions/by-reviewId/review', data, { params: { reviewId } }),
   // 获取生成的代码
-  getCode: (psuId, language = 'java') => api.get('/versions/by-psuId/code', { params: { psuId, language } })
+  getCode: (psuId, language = 'java', versionNo = undefined) => {
+    const params = { psuId, language }
+    if (versionNo !== undefined && versionNo !== null) {
+      params.versionNo = versionNo
+    }
+    return api.get('/versions/by-psuId/code', { params })
+  },
+  // 下载生成代码压缩包
+  downloadCodeBundle: (psuId, language = 'java', versionNo = undefined) => {
+    const params = { psuId, language }
+    if (versionNo !== undefined && versionNo !== null) {
+      params.versionNo = versionNo
+    }
+    return api.get('/versions/by-psuId/code/download', { params, responseType: 'blob' })
+  }
 }
 
 export const userApi = {
@@ -285,7 +307,7 @@ export const compositionApi = {
     if (!isValidPsuId(psuId)) {
       return Promise.reject(new Error(`Invalid PSU ID: ${psuId}`));
     }
-    return api.post('/compositions', data, { params: { psuId } });
+    return api.put('/compositions', data, { params: { psuId } });
   },
   validate: (psuId, data) => {
     if (!isValidPsuId(psuId)) {

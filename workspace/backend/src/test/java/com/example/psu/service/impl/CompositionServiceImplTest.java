@@ -15,6 +15,8 @@ import com.example.psu.repository.PromptCompositionRepository;
 import com.example.psu.repository.PromptCompositionRevisionRepository;
 import com.example.psu.repository.PsuRepository;
 import com.example.psu.entity.PsuUnit;
+import com.example.psu.service.PsuService;
+import com.example.psu.service.engine.PromptRuleEngine;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -47,6 +49,9 @@ class CompositionServiceImplTest {
     @Mock
     private PsuRepository psuRepository;
 
+    @Mock
+    private PsuService psuService;
+
     @InjectMocks
     private CompositionServiceImpl compositionService;
 
@@ -57,7 +62,9 @@ class CompositionServiceImplTest {
             revisionRepository,
             jsonSchemaRepository,
             psuRepository,
-            new ObjectMapper()
+            new ObjectMapper(),
+            new PromptRuleEngine(new ObjectMapper()),
+            psuService
         );
     }
 
@@ -132,13 +139,18 @@ class CompositionServiceImplTest {
         CompositionRenderRequest request = new CompositionRenderRequest();
         request.setCompositionId(10L);
         request.setInput(Map.of("userId", "u-1"));
+        request.setInjectionPlanOverride(List.of(
+            Map.of("path", "userId", "required", true),
+            Map.of("path", "orderId", "defaultValue", "N/A")
+        ));
 
         when(compositionRepository.findById(10L)).thenReturn(Optional.of(composition));
 
         CompositionRenderResponse response = compositionService.render(1L, request);
 
         assertTrue(response.getRenderedPrompt().contains("u-1"));
-        assertTrue(response.getMissingVars().contains("orderId"));
+        assertTrue(response.getRenderedPrompt().contains("N/A"));
+        assertNotNull(response.getParamSetSnapshot());
     }
 }
 

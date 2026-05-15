@@ -1,6 +1,8 @@
 demo2/workspace/backend/target/
 demo2/workspace/backend/target
-/example/
+/example/*
+!/example/deploy/
+!/example/deploy/**
 .vscode/settings.json
 dist/
 demo2/workspace/frontend/node_modules/.vite/deps/_metadata.json
@@ -25,3 +27,4 @@ pnpm-debug.log*
 /workspace/backend/backend-*.err.log
 /workspace/backend/backend-*.out.log
 /workspace/backend/boot-test*.log
+workspace/backend/src/main/resources/db

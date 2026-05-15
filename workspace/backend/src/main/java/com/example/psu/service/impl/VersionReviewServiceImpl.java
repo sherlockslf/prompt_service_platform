@@ -101,7 +101,8 @@ public class VersionReviewServiceImpl implements VersionReviewService {
     public VersionReview submitVersion(Long psuId, Long submitterId) {
         PsuUnit psu = psuRepository.findById(psuId)
             .orElseThrow(() -> new BusinessException(ErrorCode.PSU_NOT_FOUND, "PSU不存在: " + psuId));
-        return submitVersion(psuId, psu.getVersionNo(), submitterId);
+        Integer targetVersionNo = resolveDefaultSubmittableVersionNo(psu);
+        return submitVersion(psuId, targetVersionNo, submitterId);
     }
 
     @Override
@@ -194,21 +195,43 @@ public class VersionReviewServiceImpl implements VersionReviewService {
 
     @Override
     public String getCode(Long psuId, String language) {
+        return getCode(psuId, null, language);
+    }
+
+    @Override
+    public String getCode(Long psuId, Integer versionNo, String language) {
         RequestValidationUtils.requireNonNull(psuId, "psuId");
         String normalizedLanguage = normalizeLanguage(language);
-        PsuReleaseVersion formal = psuReleaseVersionRepository.findTopByPsuIdAndTagOrderByUpdatedAtDesc(psuId, PsuTag.FORMAL)
-            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "未找到正式发布版本"));
-        VersionReview approved = versionReviewRepository.findByPsuIdAndVersionNo(psuId, formal.getPsuVersionNo())
-            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "正式版本审核记录不存在"));
+        Integer resolvedVersionNo = versionNo;
+        if (resolvedVersionNo == null) {
+            PsuReleaseVersion formal = psuReleaseVersionRepository.findTopByPsuIdAndTagOrderByUpdatedAtDesc(psuId, PsuTag.FORMAL)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "未找到正式发布版本"));
+            resolvedVersionNo = formal.getPsuVersionNo();
+        }
+        VersionReview approved = versionReviewRepository.findByPsuIdAndVersionNo(psuId, resolvedVersionNo)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "指定版本审核记录不存在"));
 
-        if (LANGUAGE_JAVA.equals(normalizedLanguage) && (approved.getCodeContent() == null || approved.getCodeContent().isBlank())) {
-            approved.setCodeContent(codeGeneratorService.generateCompleteBusinessCode(psuId, LANGUAGE_JAVA));
+        if (LANGUAGE_JAVA.equals(normalizedLanguage) && (approved.getCodeContent() == null || approved.getCodeContent().isBlank() || versionNo != null)) {
+            approved.setCodeContent(codeGeneratorService.generateCompleteBusinessCode(psuId, resolvedVersionNo, LANGUAGE_JAVA));
             versionReviewRepository.save(approved);
         }
         if (LANGUAGE_PYTHON.equals(normalizedLanguage)) {
-            return codeGeneratorService.generateCompleteBusinessCode(psuId, LANGUAGE_PYTHON);
+            return codeGeneratorService.generateCompleteBusinessCode(psuId, resolvedVersionNo, LANGUAGE_PYTHON);
         }
         return approved.getCodeContent();
+    }
+
+    @Override
+    public byte[] downloadCodeBundle(Long psuId, Integer versionNo, String language) {
+        RequestValidationUtils.requireNonNull(psuId, "psuId");
+        String normalizedLanguage = normalizeLanguage(language);
+        Integer resolvedVersionNo = versionNo;
+        if (resolvedVersionNo == null) {
+            PsuReleaseVersion formal = psuReleaseVersionRepository.findTopByPsuIdAndTagOrderByUpdatedAtDesc(psuId, PsuTag.FORMAL)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "未找到正式发布版本"));
+            resolvedVersionNo = formal.getPsuVersionNo();
+        }
+        return codeGeneratorService.generateBusinessCodeBundleZip(psuId, resolvedVersionNo, normalizedLanguage);
     }
 
     @Override
@@ -452,5 +475,28 @@ public class VersionReviewServiceImpl implements VersionReviewService {
             return LANGUAGE_PYTHON;
         }
         return LANGUAGE_JAVA;
+    }
+
+    private Integer resolveDefaultSubmittableVersionNo(PsuUnit psu) {
+        List<PsuVersion> candidates = psuVersionRepository.findByPsuIdOrderByVersionNoDesc(psu.getPsuId());
+        for (PsuVersion version : candidates) {
+            if (version == null) {
+                continue;
+            }
+            if (version.getStatus() == PsuStatus.FORMAL) {
+                continue;
+            }
+            if (version.getSchemaVersionNo() == null) {
+                continue;
+            }
+            if (version.getCompositionId() == null || version.getCompositionRevisionNo() == null) {
+                continue;
+            }
+            if (versionReviewRepository.findByPsuIdAndVersionNo(psu.getId(), version.getVersionNo()).isPresent()) {
+                continue;
+            }
+            return version.getVersionNo();
+        }
+        throw new BusinessException(ErrorCode.BAD_REQUEST, "当前PSU不存在可提交审核的版本");
     }
 }

@@ -2,6 +2,7 @@ package com.example.psu.dto.request;
 
 import lombok.Data;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -11,4 +12,5 @@ import java.util.Map;
 public class CompositionRenderRequest {
     private Long compositionId;
     private Map<String, Object> input;
+    private List<Map<String, Object>> injectionPlanOverride;
 }

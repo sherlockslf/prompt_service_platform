@@ -415,12 +415,4 @@ CREATE TABLE IF NOT EXISTS ai_prompt_evaluation_reports (
     INDEX idx_eval_reports_created_at (created_at)
 ) COMMENT 'AI Prompt评估报告表';
 
--- 初始化预置用户（每种角色一个）
-INSERT IGNORE INTO ai_prompt_users (username, password, role, enabled) 
-VALUES 
-('admin_user', 'Admin@123', 'ADMIN', 1),
-('dev_user', 'Dev@123', 'DEVELOPER', 1),
-('bus_user', 'Bus@123', 'BUSINESS', 1);
-
-INSERT IGNORE INTO ai_prompt_system_configs (config_key, config_value, config_type) 
-VALUES ('default_api_key', 'encrypted_value_placeholder', 'API_KEY');
+-- 注意：schema.sql 仅用于初始化表结构，不包含任何初始化数据

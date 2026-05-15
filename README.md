@@ -57,7 +57,6 @@ flowchart TB
     C --> C2[services/api.js]
     C --> C3[components]
     D --> D1[db_bootstrap_from_yml.py]
-    D --> D2[db_init_schema_and_seed.py]
     D --> D3[psu_integration/run_all_tests.ps1]
 
     classDef root fill:#dbeafe,color:#1e3a8a,stroke:#1d4ed8;
@@ -421,7 +420,9 @@ npm run dev
 
 前端 API 前缀切换（模块G）：
 - 默认：`/api`（兼容旧路径）
-- 启用新前缀：设置环境变量 `VITE_API_USE_V1=true` 后走 `/api/v1`
+- 切换到 `/api/v1`：设置环境变量 `VITE_API_USE_V1=true`
+- 显式指定 API 基址（优先级更高）：设置 `VITE_API_BASE_URL`，例如 `https://your-domain.example.com/api`
+- 子路径部署（如 `http://ip/psu/`）：设置 `VITE_PUBLIC_BASE=/psu/` 且建议 `VITE_API_BASE_URL=/psu-api`
 
 ### 6.3 默认地址
 
@@ -432,7 +433,7 @@ npm run dev
 ### 6.4 数据库工具（版本号改单字段后）
 
 - 删除库中已有表：`workspace/tools/db_drop_existing_tables.py`
-- 初始化表结构并初始化原始数据：`workspace/tools/db_bootstrap_from_yml.py`
+- 初始化数据库表结构（读取 `application.yml`）：`workspace/tools/db_bootstrap_from_yml.py`
 
 运行前需配置环境变量：
 
@@ -483,6 +484,7 @@ powershell -ExecutionPolicy Bypass -File workspace\tools\psu_integration\run_all
 - 模块2发布方案（灰度/回滚）：`docs/模块2-发布灰度回滚-详细方案.md`
 - 版本号改造方案（单字段）：`docs/版本号单字段改造方案.md`
 - 前端说明：`workspace/frontend/README.md`
+- 同机部署指南（Nginx + 前后端同服务器）：`example/deploy/README.md`
 
 ## 9. 数据库约定（新增）
 

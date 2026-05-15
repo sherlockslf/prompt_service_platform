@@ -19,6 +19,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -189,9 +191,24 @@ public class VersionReviewController {
     @GetMapping("/by-psuId/code")
     public ResponseEntity<String> getCode(
         @RequestParam Long psuId,
+        @RequestParam(required = false) Integer versionNo,
         @RequestParam(required = false, defaultValue = "java") String language
     ) {
-        return ResponseEntity.ok(versionReviewService.getCode(psuId, language));
+        return ResponseEntity.ok(versionReviewService.getCode(psuId, versionNo, language));
+    }
+
+    @GetMapping("/by-psuId/code/download")
+    public ResponseEntity<byte[]> downloadCode(
+        @RequestParam Long psuId,
+        @RequestParam(required = false) Integer versionNo,
+        @RequestParam(required = false, defaultValue = "java") String language
+    ) {
+        byte[] zipBytes = versionReviewService.downloadCodeBundle(psuId, versionNo, language);
+        String fileName = "psu-" + psuId + (versionNo == null ? "" : "-v" + versionNo) + "-" + language + "-bundle.zip";
+        return ResponseEntity.ok()
+            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
+            .contentType(MediaType.APPLICATION_OCTET_STREAM)
+            .body(zipBytes);
     }
 
     /**

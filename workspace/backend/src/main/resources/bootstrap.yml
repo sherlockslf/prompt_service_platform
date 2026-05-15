@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: psu-platform
+  profiles:
+    active: dev
+  threads:
+    virtual:
+      enabled: true
+
+# 安全配置
+security:
+  jwt-secret: 387a9f2c4e7b1d0569802aefc7d45081b3ad7ef27c98641db5a9c23e8701f4d6
+  encryption-key: 9s7k2p5r8z1q4w7e3t6u9c0v2b5n8m1l
+
+# 服务器配置
+server:
+  port: 8084
+
+# 日志配置
+logging:
+  level:
+    com.example.psu: INFO
+    org.springframework.security: WARN
+    org.hibernate.orm.connections.pooling: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# Actuator配置（健康检查等）
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always

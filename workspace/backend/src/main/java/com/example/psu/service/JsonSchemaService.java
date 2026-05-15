@@ -1,10 +1,10 @@
 package com.example.psu.service;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 import com.example.psu.entity.JsonSchema;
@@ -92,7 +92,20 @@ public class JsonSchemaService {
         schema.setModifiedBy(userId == null ? 0L : userId);
         schema.setChangeLog(changeLog);
 
-        JsonSchema savedSchema = jsonSchemaRepository.save(schema);
+        JsonSchema savedSchema;
+        try {
+            // 优先走“新增版本”语义（要求数据库允许同一psu_id多行）。
+            savedSchema = jsonSchemaRepository.save(schema);
+        } catch (DataIntegrityViolationException ex) {
+            // 兼容历史库：若仍保留“psu_id单列唯一”，退化为原记录覆盖更新并递增version字段。
+            JsonSchema latest = jsonSchemaRepository.findTopByPsuIdOrderByVersionDesc(safePsuId)
+                .orElseThrow(() -> ex);
+            latest.setSchemaContent(schemaContent);
+            latest.setVersion(nextSchemaVersion);
+            latest.setModifiedBy(userId == null ? 0L : userId);
+            latest.setChangeLog(changeLog);
+            savedSchema = jsonSchemaRepository.save(latest);
+        }
         
         // 编辑Schema：PSU版本号独立递增，并记录PSU历史快照。
         psuService.bumpVersionAndSnapshot(safePsuId, userId, "UPDATE_SCHEMA");

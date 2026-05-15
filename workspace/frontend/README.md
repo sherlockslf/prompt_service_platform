@@ -80,7 +80,11 @@ npm run preview
 ```
 
 ## 环境配置
-开发环境下，API请求会被代理到后端服务（默认端口8080）。
+开发环境下，API 请求默认通过 Vite 代理到后端服务（默认 `http://localhost:8084`）。
+可通过环境变量覆盖：
+- `VITE_API_BASE_URL`：显式指定 API 基址（如 `/psu-api` 或 `https://your-domain.example.com/api`）
+- `VITE_API_USE_V1=true`：在未设置 `VITE_API_BASE_URL` 时切换为 `/api/v1`
+- `VITE_PUBLIC_BASE`：前端部署子路径（如 `/psu/`）
 
 ## 代码规范
 - 使用ESLint + Prettier进行代码格式化

@@ -23,6 +23,8 @@ public interface VersionReviewService {
     VersionReview reviewVersion(Long reviewId, ReviewRequest request, Long reviewerId);
 
     String getCode(Long psuId, String language);
+    String getCode(Long psuId, Integer versionNo, String language);
+    byte[] downloadCodeBundle(Long psuId, Integer versionNo, String language);
 
     VersionReview registerGitCommit(Long reviewId, String gitCommitHash, Long operatorId);
 
